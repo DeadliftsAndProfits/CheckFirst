@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(winget install *)",
+      "mcp__cc22f226-bf1b-4275-abb1-b2b8040668ca__search_threads",
+      "Read(//c/Users/Samir/.claude/**)",
+      "Bash(npm -v)",
+      "Bash(echo \"npm: $\\(npm -v 2>&1\\)\")",
+      "Bash(npx -v)",
+      "Bash(echo \"npx: $\\(npx -v 2>&1\\)\")",
+      "Bash(git --version)",
+      "PowerShell($ErrorActionPreference='SilentlyContinue'; \"node: \" + \\(& node -v\\); \"npm: \" + \\(& npm -v\\); \"where node: \" + \\(\\(Get-Command node\\).Source\\); \"winget: \" + \\(\\(Get-Command winget\\).Source\\))",
+      "PowerShell(winget install --id OpenJS.NodeJS.LTS -e --source winget --accept-package-agreements --accept-source-agreements --silent)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); \"node: \" + \\(& node -v\\); \"npm: \" + \\(& npm -v\\); \"path: \" + \\(Get-Command node\\).Source)"
+    ]
+  }
+}
