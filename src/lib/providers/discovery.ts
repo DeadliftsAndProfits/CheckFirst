@@ -15,6 +15,7 @@ export const searchLinksProvider: Provider = {
   label: "Public profiles & directories",
   category: "online",
   sourceClass: "discovery",
+  dataOrigin: "link",
   appliesTo(ctx) {
     const n = ctx.normalised;
     return Boolean(n.fullName || n.businessName || n.username || n.email || n.phone || n.domain || n.website);
@@ -41,6 +42,7 @@ export const courtsProvider: Provider = {
   label: "Published court & tribunal mentions",
   category: "public_records",
   sourceClass: "discovery",
+  dataOrigin: "link",
   appliesTo(ctx) {
     return Boolean(ctx.normalised.fullName || ctx.normalised.businessName);
   },
@@ -71,6 +73,7 @@ export const licencesProvider: Provider = {
   label: "Trade & occupational licences",
   category: "licences",
   sourceClass: "discovery",
+  dataOrigin: "link",
   appliesTo(ctx) {
     return ctx.input.type === "person" || ctx.input.type === "business";
   },
@@ -114,6 +117,7 @@ export const professionalProvider: Provider = {
   label: "Professional & regulatory registers",
   category: "professional",
   sourceClass: "discovery",
+  dataOrigin: "link",
   appliesTo(ctx) {
     return ctx.input.type === "person" || ctx.input.type === "business";
   },

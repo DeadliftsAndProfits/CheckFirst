@@ -42,6 +42,7 @@ export const tlsProvider: Provider = {
   label: "SSL/TLS certificate",
   category: "website",
   sourceClass: "authoritative",
+  dataOrigin: "live",
   appliesTo(ctx) {
     return Boolean(ctx.normalised.website || ctx.normalised.domain);
   },

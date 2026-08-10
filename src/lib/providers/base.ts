@@ -10,6 +10,7 @@ import type {
   ResultItem,
   SearchInput,
   SourceClass,
+  DataOrigin,
 } from "@/types/core";
 
 /** Everything a provider needs to run. */
@@ -29,6 +30,8 @@ export interface Provider {
   category: ProviderCategory;
   /** Default source authority/classification. */
   sourceClass: SourceClass;
+  /** Where this provider's data comes from — the honesty axis (R3). */
+  dataOrigin: DataOrigin;
   /** Which search types this provider applies to. */
   appliesTo(ctx: ProviderContext): boolean;
   /** Run the lookup. Should not throw; use fail()/notConfigured() helpers. */
@@ -61,6 +64,7 @@ export function buildResult(opts: BuildOpts): ProviderResult {
     sourceUrl: opts.sourceUrl,
     sourceAuthority: opts.sourceAuthority,
     sourceClass: opts.provider.sourceClass,
+    dataOrigin: demo ? "demo" : opts.provider.dataOrigin,
     warnings: opts.warnings ?? [],
     error: opts.error,
     cacheExpiry: opts.cacheSeconds
@@ -123,6 +127,7 @@ export async function fetchWithTimeout(
  */
 export async function runProviderSafely(provider: Provider, ctx: ProviderContext, timeoutMs: number): Promise<ProviderResult> {
   const query = ctx.queries[0] ?? ctx.normalised.fullName ?? ctx.normalised.website ?? "";
+  const started = Date.now();
   const timeout = new Promise<ProviderResult>((resolve) => {
     const t = setTimeout(() => {
       resolve(buildResult({ provider, status: "unavailable", query, warnings: ["Provider timed out"] }));
@@ -130,10 +135,13 @@ export async function runProviderSafely(provider: Provider, ctx: ProviderContext
     // Allow GC if run resolves first.
     ctx.signal.addEventListener("abort", () => clearTimeout(t), { once: true });
   });
+  let result: ProviderResult;
   try {
-    return await Promise.race([provider.run(ctx), timeout]);
+    result = await Promise.race([provider.run(ctx), timeout]);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown provider error";
-    return fail(provider, query, message);
+    result = fail(provider, query, message);
   }
+  result.durationMs = Date.now() - started;
+  return result;
 }

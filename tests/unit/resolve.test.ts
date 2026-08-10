@@ -12,6 +12,7 @@ function provider(id: string, items: { signals: EntitySignal[]; demo?: boolean }
     timestamp: new Date().toISOString(),
     results: items.map((it) => ({ title: "x", sourceClass: "discovery", signals: it.signals, demo: it.demo })),
     sourceClass: "discovery",
+    dataOrigin: "live",
     warnings: [],
   };
 }

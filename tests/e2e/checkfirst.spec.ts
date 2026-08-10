@@ -33,15 +33,17 @@ test.describe("Check First — landing hero (Round 2)", () => {
     await expect(page.getByLabel(/Website or domain/i)).toBeVisible();
   });
 
-  test("Business default is simplified; website/phone behind optional", async ({ page }) => {
+  test("Business default is simplified (name / ABN-ACN / State); suburb+website behind optional", async ({ page }) => {
     await page.getByRole("tab", { name: "Business" }).click();
     await expect(page.getByLabel("Business / company name")).toBeVisible();
     await expect(page.getByLabel("ABN / ACN")).toBeVisible();
-    await expect(page.getByLabel("Location")).toBeVisible();
+    await expect(page.getByLabel("State")).toBeVisible();
+    // Suburb removed from the default business form (R3 §13).
+    await expect(page.getByLabel("Suburb / city")).toHaveCount(0);
     await expect(page.getByLabel("Website")).toHaveCount(0);
     await page.getByRole("button", { name: /add optional matching details/i }).click();
+    await expect(page.getByLabel("Suburb / city")).toBeVisible();
     await expect(page.getByLabel("Website")).toBeVisible();
-    await expect(page.getByLabel("Phone")).toBeVisible();
   });
 
   test("Phone tab: add, remove, and value persistence", async ({ page }) => {
@@ -104,14 +106,37 @@ test.describe("Hero → dedicated /search journey (§21)", () => {
     await expect(page.getByRole("heading", { name: "Sources checked" })).toBeVisible({ timeout: 25_000 });
   });
 
-  test("New search returns to the homepage", async ({ page }) => {
+  test("New search stays on /search with a blank advanced form (does NOT go home)", async ({ page }) => {
     await page.goto("/");
     await page.getByLabel("First name").fill("Jane");
     await page.getByLabel("Last name").fill("Doe");
     await page.getByRole("button", { name: /^check first$/i }).click();
     await expect(page).toHaveURL(/\/search$/);
+    await page.getByRole("heading", { name: "Sources checked" }).waitFor({ timeout: 20_000 });
+
     await page.getByRole("button", { name: /new search/i }).click();
-    await expect(page).toHaveURL("/");
-    await expect(page.getByRole("heading", { name: /Know before/i })).toBeVisible();
+    // Stays on /search, shows the blank advanced New search form.
+    await expect(page).toHaveURL(/\/search$/);
+    await expect(page.getByRole("heading", { name: "New search" })).toBeVisible();
+    const first = page.getByLabel("First name");
+    await expect(first).toBeVisible();
+    await expect(first).toHaveValue("");
+    // Previous results are cleared.
+    await expect(page.getByRole("heading", { name: "Sources checked" })).toHaveCount(0);
+  });
+
+  test("Edit search keeps results visible and re-runs on update", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("First name").fill("Sam");
+    await page.getByLabel("Last name").fill("Jones");
+    await page.getByRole("button", { name: /^check first$/i }).click();
+    await expect(page).toHaveURL(/\/search$/);
+    await page.getByRole("heading", { name: "Sources checked" }).waitFor({ timeout: 20_000 });
+    await page.getByRole("button", { name: /edit search/i }).click();
+    // Advanced edit form appears, prefilled; results remain beneath.
+    await expect(page.getByRole("heading", { name: "Edit search" })).toBeVisible();
+    await expect(page.getByLabel("First name")).toHaveValue("Sam");
+    await page.getByRole("button", { name: /update search/i }).click();
+    await expect(page.getByRole("heading", { name: "Sources checked" })).toBeVisible({ timeout: 20_000 });
   });
 });

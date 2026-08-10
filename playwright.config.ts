@@ -20,7 +20,10 @@ export default defineConfig({
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
+    // Demo mode ON for E2E so the full results/candidate UI path is exercised.
+    // Production/default (no env) is demo OFF — verified in integration tests.
     command: "node node_modules/next/dist/bin/next start -p 3100",
+    env: { CHECKFIRST_DEMO_MODE: "true" },
     url: "http://localhost:3100",
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,

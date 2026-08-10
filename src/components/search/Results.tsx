@@ -1,6 +1,6 @@
 "use client";
 
-import type { Candidate, ProviderResult, ProviderStatus, SearchReport } from "@/types/core";
+import type { Candidate, ProviderResult, ProviderStatus, DataOrigin, SearchReport } from "@/types/core";
 import { Icon } from "@/components/Icon";
 
 const STATUS_META: Record<ProviderStatus, { label: string; cls: string }> = {
@@ -13,6 +13,17 @@ const STATUS_META: Record<ProviderStatus, { label: string; cls: string }> = {
   error: { label: "Error", cls: "bg-rose-50 text-rose-700" },
   rate_limited: { label: "Rate limited", cls: "bg-amber-50 text-amber-700" },
 };
+
+/** Honesty badge — where the data actually came from. */
+function classOf(p: { dataOrigin: DataOrigin; status: ProviderStatus }): { label: string; cls: string } {
+  if (p.status === "not_configured") return { label: "NEEDS CONFIG", cls: "bg-amber-100 text-amber-800" };
+  if (p.dataOrigin === "demo") return { label: "DEMO", cls: "bg-fuchsia-100 text-fuchsia-700" };
+  if (p.dataOrigin === "link") return { label: "LINKS", cls: "bg-slate-100 text-slate-500" };
+  if (p.dataOrigin === "cached") return { label: "CACHED", cls: "bg-sky-100 text-sky-700" };
+  if (p.dataOrigin === "local_dataset") return { label: "LOCAL DATA", cls: "bg-indigo-100 text-indigo-700" };
+  if (p.dataOrigin === "live") return { label: "LIVE", cls: "bg-emerald-100 text-emerald-700" };
+  return { label: "—", cls: "bg-slate-100 text-slate-400" };
+}
 
 const CATEGORY_TITLES: Record<string, string> = {
   identity: "Identity",
@@ -30,11 +41,7 @@ const CATEGORY_TITLES: Record<string, string> = {
 const CATEGORY_ORDER = ["identity", "business", "licences", "professional", "website", "email", "web", "online", "public_records", "contact"];
 
 function DemoBadge() {
-  return (
-    <span className="ml-2 rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fuchsia-700">
-      Demo data
-    </span>
-  );
+  return <span className="ml-2 rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fuchsia-700">Demo data</span>;
 }
 
 function SourceBadge({ cls }: { cls: "authoritative" | "discovery" }) {
@@ -43,9 +50,7 @@ function SourceBadge({ cls }: { cls: "authoritative" | "discovery" }) {
       <Icon name="check" size={11} /> Authoritative
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-      Discovery
-    </span>
+    <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Discovery</span>
   );
 }
 
@@ -81,12 +86,10 @@ function CandidateCard({ c, rank }: { c: Candidate; rank: number }) {
       <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
         {c.evidence.map((e, i) => (
           <li key={i} className="flex items-center gap-2 text-sm">
-            {e.polarity === "match" && <Icon name="check" size={14} className="text-trust-600 shrink-0" />}
-            {e.polarity === "conflict" && <Icon name="x" size={14} className="text-rose-500 shrink-0" />}
-            {e.polarity === "unknown" && <span className="text-slate-300 shrink-0">?</span>}
-            <span className={e.polarity === "conflict" ? "text-rose-700" : e.polarity === "unknown" ? "text-slate-400" : "text-ink-soft"}>
-              {e.label}
-            </span>
+            {e.polarity === "match" && <Icon name="check" size={14} className="shrink-0 text-trust-600" />}
+            {e.polarity === "conflict" && <Icon name="x" size={14} className="shrink-0 text-rose-500" />}
+            {e.polarity === "unknown" && <span className="shrink-0 text-slate-300">?</span>}
+            <span className={e.polarity === "conflict" ? "text-rose-700" : e.polarity === "unknown" ? "text-slate-400" : "text-ink-soft"}>{e.label}</span>
           </li>
         ))}
       </ul>
@@ -114,12 +117,7 @@ function ResultItemRow({ item, providerClass }: { item: ProviderResult["results"
         </dl>
       )}
       {item.sourceUrl && (
-        <a
-          href={item.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer nofollow"
-          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
-        >
+        <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700">
           Open source <Icon name="external" size={13} />
         </a>
       )}
@@ -127,17 +125,20 @@ function ResultItemRow({ item, providerClass }: { item: ProviderResult["results"
   );
 }
 
-export function Results({ report, candidates }: { report: SearchReport; candidates: Candidate[] }) {
-  const withResults = report.providers.filter((p) => p.status === "complete");
+export function Results({ report, candidates, partial }: { report: SearchReport; candidates: Candidate[]; partial?: boolean }) {
+  const s = report.summary;
+  // Real-query providers that returned results (exclude link-generators & demo-off).
+  const realWithResults = report.providers.filter((p) => p.status === "complete" && p.dataOrigin !== "link");
+  const linkProviders = report.providers.filter((p) => p.dataOrigin === "link" && p.status === "complete");
+
   const grouped = new Map<string, ProviderResult[]>();
-  for (const p of withResults) {
+  for (const p of realWithResults) {
     if (!grouped.has(p.category)) grouped.set(p.category, []);
     grouped.get(p.category)!.push(p);
   }
   const orderedCats = CATEGORY_ORDER.filter((c) => grouped.has(c));
   const top = candidates[0];
 
-  // "Things to double-check": conflicts + unavailable/not-configured providers.
   const doubleChecks: string[] = [];
   if (top) for (const e of top.evidence) if (e.polarity === "conflict") doubleChecks.push(`Conflicting ${e.label.toLowerCase()} between records.`);
   for (const p of report.providers) {
@@ -146,15 +147,16 @@ export function Results({ report, candidates }: { report: SearchReport; candidat
 
   return (
     <div className="space-y-6">
-      {/* Summary */}
+      {/* Summary + honest final status */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-xl font-bold text-ink">
-              {top ? "Possible match identified" : "Here's what we found"}
-            </h3>
-            <p className="text-sm text-ink-muted">
-              {report.summary.sourcesChecked} sources checked · {report.summary.references} public references · {report.summary.sourcesWithResults} with results
+            <h3 className="text-xl font-bold text-ink">{partial ? "Searching…" : top ? "Possible match identified" : "Search complete"}</h3>
+            <p className="mt-1 text-sm text-ink-muted">
+              {s.sourcesSearched} source{s.sourcesSearched === 1 ? "" : "s"} searched · {s.returnedResults} returned results · {s.noResults} no results
+              {s.unavailable ? ` · ${s.unavailable} unavailable` : ""}
+              {s.needsConfig ? ` · ${s.needsConfig} need configuration` : ""}
+              {s.links ? ` · ${s.links} official links` : ""}
             </p>
           </div>
           {top && (
@@ -164,14 +166,19 @@ export function Results({ report, candidates }: { report: SearchReport; candidat
             </div>
           )}
         </div>
-        {report.summary.demo && (
+        {s.demo && (
           <p className="mt-3 flex items-center gap-2 rounded-lg bg-fuchsia-50 px-3 py-2 text-sm text-fuchsia-800">
-            <Icon name="info" size={15} /> Some results below are clearly-labelled <strong>demo data</strong> shown because demo mode is on.
+            <Icon name="info" size={15} /> Demo mode is on — some results are <strong>demo data</strong>, not real searches.
+          </p>
+        )}
+        {!partial && s.sourcesSearched === 0 && (
+          <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <Icon name="alert" size={15} /> No source performed a live query for this search type. Configure ABN Lookup and a web-search key to search
+            business/person/phone data — or use the official links below.
           </p>
         )}
       </div>
 
-      {/* Candidates */}
       {candidates.length > 0 && (
         <section aria-label="Possible matches" className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Possible matches</h3>
@@ -184,7 +191,6 @@ export function Results({ report, candidates }: { report: SearchReport; candidat
         </section>
       )}
 
-      {/* Category sections */}
       {orderedCats.map((cat) => (
         <section key={cat} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="mb-1 text-base font-semibold text-ink">{CATEGORY_TITLES[cat] ?? cat}</h3>
@@ -198,7 +204,30 @@ export function Results({ report, candidates }: { report: SearchReport; candidat
         </section>
       ))}
 
-      {/* Things to double-check */}
+      {/* Official sources to check — link-generators, clearly NOT searches */}
+      {linkProviders.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-ink">Official sources to check</h3>
+          <p className="mb-2 text-xs text-ink-muted">Check First did not search these — they are one-click links to official registers and public searches you can open yourself.</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {linkProviders.flatMap((p) =>
+              p.results.map((item, i) => (
+                <a
+                  key={`${p.provider}-${i}`}
+                  href={item.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink-soft transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+                >
+                  <span className="truncate">{item.title}</span>
+                  <Icon name="external" size={13} className="shrink-0 text-brand-500" />
+                </a>
+              )),
+            )}
+          </div>
+        </section>
+      )}
+
       {doubleChecks.length > 0 && (
         <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
           <h3 className="mb-2 flex items-center gap-2 text-base font-semibold text-amber-800">
@@ -216,37 +245,40 @@ export function Results({ report, candidates }: { report: SearchReport; candidat
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="mb-3 text-base font-semibold text-ink">Sources checked</h3>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                 <th className="pb-2 font-semibold">Source</th>
-                <th className="pb-2 font-semibold">Type</th>
+                <th className="pb-2 font-semibold">Origin</th>
                 <th className="pb-2 font-semibold">Status</th>
-                <th className="pb-2 font-semibold">Checked</th>
+                <th className="pb-2 font-semibold">Took</th>
               </tr>
             </thead>
             <tbody>
-              {report.providers.map((p) => (
-                <tr key={p.provider} className="border-t border-slate-100">
-                  <td className="py-2 pr-3 font-medium text-ink-soft">
-                    {p.sourceUrl ? (
-                      <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="text-brand-600 hover:underline">
-                        {p.providerLabel}
-                      </a>
-                    ) : (
-                      p.providerLabel
-                    )}
-                    {p.demo && <DemoBadge />}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <SourceBadge cls={p.sourceClass} />
-                  </td>
-                  <td className="py-2 pr-3">
-                    <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_META[p.status].cls}`}>{STATUS_META[p.status].label}</span>
-                  </td>
-                  <td className="py-2 text-xs text-slate-400">{new Date(p.timestamp).toLocaleTimeString()}</td>
-                </tr>
-              ))}
+              {report.providers.map((p) => {
+                const cl = classOf(p);
+                return (
+                  <tr key={p.provider} className="border-t border-slate-100">
+                    <td className="py-2 pr-3 font-medium text-ink-soft">
+                      {p.sourceUrl ? (
+                        <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="text-brand-600 hover:underline">
+                          {p.providerLabel}
+                        </a>
+                      ) : (
+                        p.providerLabel
+                      )}
+                      {p.demo && <DemoBadge />}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cl.cls}`}>{cl.label}</span>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_META[p.status].cls}`}>{STATUS_META[p.status].label}</span>
+                    </td>
+                    <td className="py-2 text-xs text-slate-400">{typeof p.durationMs === "number" ? `${p.durationMs}ms` : "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

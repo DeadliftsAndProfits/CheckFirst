@@ -54,6 +54,17 @@ export type ProviderStatus =
 /** How authoritative a source is. */
 export type SourceClass = "authoritative" | "discovery";
 
+/**
+ * Where a provider's output actually comes from — the honesty axis (R3).
+ * - live: a real network query executed against the source this run.
+ * - local_dataset: queried an ingested open dataset held locally.
+ * - cached: real data retrieved earlier, served from cache.
+ * - link: no query ran; the provider generated official-source search links.
+ * - demo: in-code fixture (explicit demo mode only).
+ * - none: nothing retrieved (e.g. not configured).
+ */
+export type DataOrigin = "live" | "local_dataset" | "cached" | "link" | "demo" | "none";
+
 export type ProviderCategory =
   | "identity"
   | "business"
@@ -121,6 +132,10 @@ export interface ProviderResult {
   sourceUrl?: string;
   sourceAuthority?: string;
   sourceClass: SourceClass;
+  /** Where this output came from (honesty axis, R3). */
+  dataOrigin: DataOrigin;
+  /** Milliseconds the provider actually took to run (real timing). */
+  durationMs?: number;
   warnings: string[];
   /** Present when status === "error". Human-readable, never a raw stack. */
   error?: string;
@@ -157,10 +172,20 @@ export interface SearchReport {
   queries: string[];
   providers: ProviderResult[];
   candidates: Candidate[];
-  /** Aggregate counts for the header/summary. */
+  /** Aggregate counts for the header/summary — honest (R3). */
   summary: {
-    sourcesChecked: number;
-    sourcesWithResults: number;
+    /** Providers that actually executed a real query (live/local/cached). */
+    sourcesSearched: number;
+    /** Of those, how many returned results. */
+    returnedResults: number;
+    /** Of those, how many genuinely found nothing. */
+    noResults: number;
+    unavailable: number;
+    needsConfig: number;
+    errored: number;
+    /** Official-source links generated (not searches). */
+    links: number;
+    /** References found by real queries (excludes link items). */
     references: number;
     demo: boolean;
   };
@@ -172,7 +197,12 @@ export interface SearchReport {
 
 /** Events streamed over NDJSON during a live search. */
 export type SearchEvent =
-  | { kind: "meta"; normalised: Record<string, string>; queries: string[]; providerList: { provider: string; providerLabel: string; category: ProviderCategory }[] }
+  | {
+      kind: "meta";
+      normalised: Record<string, string>;
+      queries: string[];
+      providerList: { provider: string; providerLabel: string; category: ProviderCategory; dataOrigin: DataOrigin }[];
+    }
   | { kind: "provider"; result: ProviderResult }
   | { kind: "candidates"; candidates: Candidate[] }
   | { kind: "report"; report: SearchReport }

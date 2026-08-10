@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { SearchInput } from "@/types/core";
+import type { SearchInput, SearchReport } from "@/types/core";
 import { useSearch } from "@/components/search/useSearch";
 import { LiveProgress } from "@/components/search/LiveProgress";
 import { Results } from "@/components/search/Results";
 import { SearchForm } from "@/components/search/SearchForm";
 import { Logo } from "@/components/Logo";
 import { Icon } from "@/components/Icon";
+import { computeSummary } from "@/lib/reportSummary";
 import { readPendingSearch, setPendingSearch, clearPendingSearch } from "@/lib/client/searchStore";
 
 function summarise(input: SearchInput): { title: string; parts: string[] } {
@@ -26,7 +27,7 @@ function summarise(input: SearchInput): { title: string; parts: string[] } {
       title = input.businessName || (input.abn ? `ABN ${input.abn}` : "this business");
       if (input.abn) parts.push(`ABN ${input.abn}`);
       if (input.acn) parts.push(`ACN ${input.acn}`);
-      if (input.suburb || input.state) parts.push([input.suburb, input.state].filter(Boolean).join(" "));
+      if (input.state) parts.push(input.state);
       break;
     case "phone":
       title = (input.phones ?? [input.phone]).filter(Boolean).join(", ") || "this number";
@@ -45,10 +46,9 @@ export default function SearchPage() {
   const router = useRouter();
   const { state, search, reset } = useSearch();
   const [input, setInput] = useState<SearchInput | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [panel, setPanel] = useState<null | "edit" | "new">(null);
   const started = useRef(false);
 
-  // On mount: pick up the pending search and auto-start it.
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -56,29 +56,52 @@ export default function SearchPage() {
     if (pending) {
       setInput(pending);
       search(pending);
+    } else {
+      setPanel("new");
     }
   }, [search]);
 
   const runNew = (next: SearchInput) => {
     setPendingSearch(next);
     setInput(next);
-    setEditing(false);
+    setPanel(null);
     reset();
     search(next);
   };
-
   const newSearch = () => {
     clearPendingSearch();
-    router.push("/");
+    reset();
+    setInput(null);
+    setPanel("new");
   };
 
   const summary = input ? summarise(input) : null;
   const busy = state.phase === "searching";
   const report = state.report;
 
+  // Live/partial report for progressive rendering while providers stream in.
+  const liveReport = useMemo<SearchReport | null>(() => {
+    if (!input) return null;
+    const providers = [...state.providers.values()];
+    if (!providers.length) return null;
+    return {
+      input,
+      normalised: state.meta?.normalised ?? {},
+      queries: state.meta?.queries ?? [],
+      providers,
+      candidates: state.candidates,
+      summary: computeSummary(providers),
+      notices: [],
+      startedAt: "",
+      finishedAt: "",
+    };
+  }, [input, state.providers, state.candidates, state.meta]);
+
+  const showResultsArea = input && panel !== "new" && state.phase !== "idle";
+  const hasPartial = liveReport && (state.candidates.length > 0 || liveReport.providers.some((p) => p.status === "complete" && p.dataOrigin !== "link"));
+
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Link href="/" aria-label="Check First home">
@@ -86,18 +109,11 @@ export default function SearchPage() {
           </Link>
           <div className="flex items-center gap-2">
             {input && (
-              <button
-                onClick={() => setEditing((v) => !v)}
-                aria-expanded={editing}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:bg-slate-50"
-              >
+              <button onClick={() => setPanel((p) => (p === "edit" ? null : "edit"))} aria-expanded={panel === "edit"} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-ink-soft transition-colors hover:bg-slate-50">
                 <Icon name="edit" size={15} /> Edit search
               </button>
             )}
-            <button
-              onClick={newSearch}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
-            >
+            <button onClick={newSearch} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700">
               <Icon name="plus" size={15} /> New search
             </button>
           </div>
@@ -105,36 +121,34 @@ export default function SearchPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        {/* No pending search (direct/refresh with empty storage). */}
-        {!input && (
-          <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-            <h1 className="text-xl font-bold text-ink">Start a search</h1>
-            <p className="mt-1 text-sm text-ink-muted">Enter what you know and Check First will check public sources.</p>
+        {/* New search — blank advanced form, no results */}
+        {panel === "new" && (
+          <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+            <h1 className="text-xl font-bold text-ink">New search</h1>
+            <p className="mt-1 text-sm text-ink-muted">Choose what to check and enter what you know. The search runs here.</p>
             <div className="mt-4">
-              <SearchForm submitLabel="Check first" onSubmit={runNew} />
+              <SearchForm advanced submitLabel="Search" onSubmit={runNew} autoFocus />
             </div>
           </div>
         )}
 
-        {input && summary && (
+        {panel !== "new" && input && summary && (
           <>
-            {/* Search header */}
             <div className="mb-5">
               <p className="text-sm font-medium text-ink-muted">Checking</p>
               <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">{summary.title}</h1>
               {summary.parts.length > 0 && <p className="mt-1 text-ink-muted">{summary.parts.join(" · ")}</p>}
             </div>
 
-            {/* Edit panel */}
-            {editing && (
+            {panel === "edit" && (
               <div className="mb-6 animate-fade-up rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="font-semibold text-ink">Edit search</h2>
-                  <button onClick={() => setEditing(false)} aria-label="Close edit" className="rounded p-1 text-slate-400 hover:bg-slate-100">
+                  <button onClick={() => setPanel(null)} aria-label="Close edit" className="rounded p-1 text-slate-400 hover:bg-slate-100">
                     <Icon name="x" size={18} />
                   </button>
                 </div>
-                <SearchForm initial={input} submitLabel="Update search" onSubmit={runNew} serverErrors={state.fieldErrors} />
+                <SearchForm advanced initial={input} submitLabel="Update search" onSubmit={runNew} serverErrors={state.fieldErrors} />
               </div>
             )}
 
@@ -143,26 +157,28 @@ export default function SearchPage() {
                 <p className="flex items-center gap-2 font-medium">
                   <Icon name="alert" size={17} /> {state.error ?? "The search could not be completed."}
                 </p>
-                <button onClick={() => setEditing(true)} className="mt-3 text-sm font-semibold text-brand-700 hover:underline">
+                <button onClick={() => setPanel("edit")} className="mt-3 text-sm font-semibold text-brand-700 hover:underline">
                   Edit your search and try again
                 </button>
               </div>
             )}
 
-            {/* Active search — full width */}
-            {busy && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-                <LiveProgress state={state} />
-              </div>
-            )}
-
-            {/* Results — full workspace width, two columns on large screens */}
-            {report && state.phase === "done" && (
+            {showResultsArea && (busy || report) && (
               <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
-                  <Results report={report} candidates={state.candidates} />
+                <div className="space-y-6 lg:col-span-2">
+                  {busy && (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
+                      <LiveProgress state={state} />
+                    </div>
+                  )}
+                  {/* Progressive results while searching, full results when done */}
+                  {report && state.phase === "done" ? (
+                    <Results report={report} candidates={state.candidates} />
+                  ) : (
+                    busy && hasPartial && liveReport && <Results report={liveReport} candidates={state.candidates} partial />
+                  )}
                 </div>
-                <aside className="space-y-4 lg:col-span-1">
+                <aside className="lg:col-span-1">
                   <div className="sticky top-20 space-y-4">
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">At a glance</h3>
@@ -172,15 +188,15 @@ export default function SearchPage() {
                           <div className="text-xs font-medium text-slate-400">identity confidence · {state.candidates[0].displayName}</div>
                         </div>
                       ) : (
-                        <p className="mt-2 text-sm text-ink-muted">No single confident match — review the evidence below.</p>
+                        <p className="mt-2 text-sm text-ink-muted">{busy ? "Searching…" : "No single confident match — review the evidence."}</p>
                       )}
                       <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-                        <Stat n={report.summary.sourcesChecked} label="sources" />
-                        <Stat n={report.summary.references} label="references" />
-                        <Stat n={state.candidates.length} label="candidates" />
+                        <Stat n={(report ?? liveReport)?.summary.sourcesSearched ?? 0} label="searched" />
+                        <Stat n={(report ?? liveReport)?.summary.references ?? 0} label="references" />
+                        <Stat n={(report ?? liveReport)?.summary.links ?? 0} label="links" />
                       </dl>
                     </div>
-                    {report.notices.length > 0 && (
+                    {report && report.notices.length > 0 && (
                       <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
                         <h3 className="mb-1 text-sm font-semibold text-amber-800">Notes</h3>
                         <ul className="space-y-1 text-xs text-amber-900">

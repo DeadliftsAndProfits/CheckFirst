@@ -33,6 +33,7 @@ export const rdapProvider: Provider = {
   label: "Domain registration (RDAP)",
   category: "website",
   sourceClass: "authoritative",
+  dataOrigin: "live",
   appliesTo(ctx) {
     return Boolean(ctx.normalised.domain || ctx.normalised.website);
   },

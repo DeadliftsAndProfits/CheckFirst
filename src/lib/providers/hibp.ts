@@ -23,6 +23,7 @@ export const hibpProvider: Provider = {
   label: "Email breach status",
   category: "email",
   sourceClass: "authoritative",
+  dataOrigin: "live",
   appliesTo(ctx) {
     return Boolean(ctx.normalised.email);
   },

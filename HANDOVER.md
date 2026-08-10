@@ -60,6 +60,71 @@ contact signals to candidates (demo/ABN attach business/ABN signals, not phones)
 mostly latent until web-search/HIBP keys are configured; the "Edit search" panel re-runs the whole
 search rather than diffing.
 
+## Round 3 — Real Search Status (2026-08-10)
+
+Round 3 was an integrity round. The audit (`PROVIDER_AUDIT.md`) found that the shipped default had
+`CHECKFIRST_DEMO_MODE` defaulting **on**, so normal searches silently included fixture candidates,
+and that link-generators were being counted as "sources that returned results". Both are fixed.
+Every provider result now carries a `dataOrigin` (live / local_dataset / cached / link / demo /
+none) and a real `durationMs`, surfaced in the UI as LIVE / LINK / NEEDS CONFIG / DEMO badges and a
+`TOOK` column. Verified by running the orchestrator against the live server (demo OFF) and testing
+every external endpoint with curl.
+
+**LIVE — tested, genuinely returning public data (no credentials):**
+- `dns` — DNS/MX/SPF/DMARC/NS (real, ~60–130ms). Verified example.com, telstra.com.au.
+- `tls` — SSL/TLS certificate (real, ~200ms). Verified real Telstra cert (DigiCert, "Telstra Limited", SANs).
+- `webcontent` **(new R3)** — SSRF-guarded homepage fetch → title/meta + displayed ABN/ACN (real, ~444ms). Verified Telstra title.
+- `gravatar` **(new R3)** — email → public Gravatar profile/avatar (real, ~810ms). Verified a real profile hit.
+- `rdap` — domain registration (real; intermittently slow/`unavailable` on some ccTLDs — handled).
+- `ct` — Certificate Transparency via crt.sh (real; crt.sh intermittently 404/502 → `unavailable`).
+
+**REQUIRES CONFIGURATION — real implementation, one env var from LIVE:**
+- `abn` (ABN Lookup / ABR) — needs free `ABR_GUID`. Verified endpoint rejects an empty GUID.
+- `websearch` (Google CSE / Bing) — needs `GOOGLE_CSE_API_KEY`+`GOOGLE_CSE_CX` or `BING_SEARCH_API_KEY`.
+- `hibp` (email breach status) — needs `HIBP_API_KEY`.
+
+**LINK (not a search) — official-source discovery links, clearly labelled:**
+- `searchlinks`, `courts`, `licences`, `professional`. Shown in an "Official sources to check"
+  section; excluded from the "sources searched / references" counts.
+
+**DEMO ONLY — explicit demo mode (`CHECKFIRST_DEMO_MODE=true`), default OFF:**
+- `demo-identity`, `demo-business`, `demo-licence`. Never appear in a default/production search.
+
+**LOCAL DATASET / CACHED:** architecture exists (`dataOrigin` supports both) but no dataset is
+ingested yet — a documented future step for offline ABR/licence data.
+
+### What this means per search type (default, no keys)
+- **Website:** genuinely searches (DNS, TLS, RDAP, CT, webcontent) — several real LIVE queries.
+- **Email:** genuinely searches (DNS on the domain, Gravatar); HIBP/web-search need keys.
+- **Business / Person / Phone:** **no live query without `ABR_GUID` + a web-search key.** The UI
+  says so honestly ("No source performed a live query for this search type") and offers official
+  links. Add the two free/near-free keys to make these substantive.
+
+### Round 3 search experience
+- Progressive rendering: partial results appear as providers settle (verified — SSL cert showed
+  while other providers were still "Searching"). Real perceived duration (website ~9s from real
+  RDAP/CT latency; no artificial sleeps).
+- Honest final summary: "N sources searched · N returned results · N no results · N need
+  configuration · N official links."
+- `New search` stays on `/search` with a blank advanced form; `Edit search` keeps results visible
+  and re-runs on update. Both use one advanced `SearchForm` component.
+
+### Round 3 verification
+lint ✔ · typecheck ✔ · **58 unit+integration ✔** (incl. new `integrity.test.ts` proving a default
+search contains no fixtures and link-classification) · prod build ✔ (6 routes) · **22 Playwright
+E2E ✔** (desktop + mobile, incl. New/Edit search flows) · real network audit ✔ (per-provider
+`dataOrigin` + `durationMs`) · screenshot visual inspection ✔.
+
+### Round 3 known limitations
+- Business/Person/Phone have no zero-credential LIVE provider yet — they depend on ABR + web-search
+  keys. This is honest, not hidden.
+- `rdap`/`ct` are third-party best-effort (ccTLD RDAP and crt.sh are intermittently unavailable).
+- No dev-only provider debug panel was added as a separate UI (the Sources-checked table now shows
+  origin, status and real duration, covering most of that need); a richer debug view remains a P1.
+- `/search/{searchId}` session-URL model not adopted — the existing in-memory + sessionStorage
+  handoff already keeps identifiers out of the URL safely (documented decision).
+- `webcontent` only sees server-rendered HTML; SPA-only sites won't expose their content.
+
 ### What was NOT delivered as mandated
 - **GSD orchestration.** The brief mandates the installed GSD skill. **GSD is not installed on
   this machine** (no skill/plugin/command; absent from the tool list). Rather than fabricate GSD

@@ -41,6 +41,7 @@ export const abnProvider: Provider = {
   label: "Australian Business Register (ABN Lookup)",
   category: "business",
   sourceClass: "authoritative",
+  dataOrigin: "live",
   appliesTo(ctx) {
     const n = ctx.normalised;
     return Boolean(n.abn || n.businessName || (ctx.input.type === "business"));

@@ -19,6 +19,7 @@ export const ctProvider: Provider = {
   label: "Certificate Transparency (crt.sh)",
   category: "website",
   sourceClass: "discovery",
+  dataOrigin: "live",
   appliesTo(ctx) {
     return Boolean(ctx.normalised.domain || ctx.normalised.website);
   },

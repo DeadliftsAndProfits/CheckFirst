@@ -13,6 +13,7 @@ import { providers as realProviders } from "@/lib/providers/registry";
 import { demoProviders } from "@/lib/providers/demo";
 import { type Provider, type ProviderContext, runProviderSafely } from "@/lib/providers/base";
 import { resolveCandidates } from "@/lib/resolve";
+import { computeSummary } from "@/lib/reportSummary";
 import { config } from "@/lib/config";
 
 const OVERALL_TIMEOUT_MS = 18_000;
@@ -67,7 +68,7 @@ export async function* runSearch(input: SearchInput, opts: OrchestratorOptions =
     kind: "meta",
     normalised,
     queries,
-    providerList: pool.map((p) => ({ provider: p.id, providerLabel: p.label, category: p.category })),
+    providerList: pool.map((p) => ({ provider: p.id, providerLabel: p.label, category: p.category, dataOrigin: p.dataOrigin })),
   };
 
   const collected: ProviderResult[] = [];
@@ -122,19 +123,13 @@ function buildReport(
   candidates: Candidate[],
   startedAt: string,
 ): SearchReport {
-  const sourcesChecked = providers.length;
-  const withResults = providers.filter((p) => p.status === "complete").length;
-  const references = providers.reduce((acc, p) => acc + p.results.length, 0);
-  const demo = providers.some((p) => p.demo);
-
+  const summary = computeSummary(providers);
   const notices: string[] = [];
-  const notConfigured = providers.filter((p) => p.status === "not_configured");
-  for (const p of notConfigured) {
+  for (const p of providers.filter((p) => p.status === "not_configured")) {
     notices.push(`${p.providerLabel}: ${p.warnings[0] ?? "not configured"}`);
   }
-  const errored = providers.filter((p) => p.status === "error");
-  if (errored.length) notices.push(`${errored.length} source(s) errored and were skipped.`);
-  if (demo) notices.push("Some results are clearly-labelled demo data (CHECKFIRST_DEMO_MODE is on).");
+  if (summary.errored) notices.push(`${summary.errored} source(s) errored and were skipped.`);
+  if (summary.demo) notices.push("Demo mode is ON — some results are clearly-labelled demo data, not real searches.");
 
   return {
     input,
@@ -142,7 +137,7 @@ function buildReport(
     queries,
     providers,
     candidates,
-    summary: { sourcesChecked, sourcesWithResults: withResults, references, demo },
+    summary,
     notices,
     startedAt,
     finishedAt: new Date().toISOString(),

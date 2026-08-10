@@ -5,6 +5,47 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-08-10
+
+Integrity round — make the search real and represent every source honestly. Backend providers,
+orchestration, entity resolution and confidence were preserved; the honesty model, two new live
+providers, progressive results and the New/Edit search workflow were added. Verified with an audit
+(`PROVIDER_AUDIT.md`), lint, typecheck, 58 unit+integration tests, a production build, 22 Playwright
+E2E tests, real per-provider network inspection, and screenshots.
+
+### Added
+- `PROVIDER_AUDIT.md` — evidence-based classification of every provider (LIVE / LINK / REQUIRES
+  CONFIG / DEMO / UNAVAILABLE) with real timing and endpoint tests.
+- `dataOrigin` on every provider result (live / local_dataset / cached / link / demo / none) and a
+  real `durationMs`, surfaced as LIVE / LINK / NEEDS CONFIG / DEMO badges and a `TOOK` column.
+- **Gravatar** provider (real, no credentials) — email → public profile/avatar lookup.
+- **Website content** provider (real, no credentials) — SSRF-guarded homepage fetch extracting
+  title/meta and any displayed ABN/ACN (flagged to verify against the authoritative ABR).
+- Progressive results: partial results render as providers settle; honest final summary
+  ("N searched · N returned · N no results · N need configuration · N official links").
+- Advanced search form on `/search` (all fields inline + optional phone/email context) reused by
+  both New search and Edit search. Optional name/business/location context now works for phone &
+  email searches.
+- `integrity.test.ts` — proves a default (demo-off) search contains no fixtures and that
+  link-generators are classified as links, not searched sources.
+
+### Changed
+- **`CHECKFIRST_DEMO_MODE` now defaults OFF.** Default/production searches never use fixtures;
+  demo data only appears when demo mode is explicitly enabled (and is always badged).
+- Link-generators (`searchlinks`, `courts`, `licences`, `professional`) are reclassified as
+  `link` and shown in a separate "Official sources to check" section, excluded from result counts.
+- **New search** stays on `/search` with a blank advanced form (no longer returns to the homepage);
+  previous results are cleared. **Edit search** keeps results visible and re-runs on update.
+- Person hero form: First · Last / Known location · State / Approximate age (State is its own
+  dropdown). Business hero default drops Suburb (State only); suburb moves to optional.
+- Phone & Email inputs always occupy a half-width column (2-col grid) from the first field.
+- Confidence and entity resolution now operate purely on real provider signals (no fixture inflation).
+
+### Fixed
+- Normal searches silently surfacing demo/fixture candidates as if real (demo defaulted on).
+- Search completing in ~6ms with fabricated-looking "results" — those were link-generators; real
+  searches (website/email) now show genuine multi-hundred-ms to multi-second durations.
+
 ## [0.2.0] — 2026-08-10
 
 Round 2 UX revision. The search backend, providers, orchestration, entity resolution and

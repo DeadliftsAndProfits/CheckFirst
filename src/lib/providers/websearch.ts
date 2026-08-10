@@ -40,6 +40,7 @@ export const webSearchProvider: Provider = {
   label: "Public web search",
   category: "web",
   sourceClass: "discovery",
+  dataOrigin: "live",
   appliesTo(ctx) {
     return ctx.queries.length > 0;
   },

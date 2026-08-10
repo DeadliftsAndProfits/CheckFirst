@@ -85,6 +85,7 @@ export function useSearch() {
                 timestamp: new Date().toISOString(),
                 results: [],
                 sourceClass: "discovery",
+                dataOrigin: p.dataOrigin,
                 warnings: [],
               });
             }

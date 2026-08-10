@@ -16,17 +16,18 @@ function ctx(overrides = {}) {
 describe("runProviderSafely (§37 provider states)", () => {
   it("returns a completed result on success", async () => {
     const p: Provider = {
-      id: "t", label: "T", category: "web", sourceClass: "discovery",
+      id: "t", label: "T", category: "web", sourceClass: "discovery", dataOrigin: "live",
       appliesTo: () => true,
-      run: async () => ok({ id: "t", label: "T", category: "web", sourceClass: "discovery", appliesTo: () => true, run: async () => ({}) as never }, "q", [{ title: "hit", sourceClass: "discovery" }]),
+      run: async () => ok(p, "q", [{ title: "hit", sourceClass: "discovery" }]),
     };
     const r = await runProviderSafely(p, ctx(), 1000);
     expect(r.status).toBe("complete");
+    expect(r.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("converts a thrown error into status=error, never rejects", async () => {
     const p: Provider = {
-      id: "boom", label: "Boom", category: "web", sourceClass: "discovery",
+      id: "boom", label: "Boom", category: "web", sourceClass: "discovery", dataOrigin: "live",
       appliesTo: () => true,
       run: async () => { throw new Error("kaboom"); },
     };
@@ -37,7 +38,7 @@ describe("runProviderSafely (§37 provider states)", () => {
 
   it("times out a hanging provider into status=unavailable", async () => {
     const p: Provider = {
-      id: "hang", label: "Hang", category: "web", sourceClass: "discovery",
+      id: "hang", label: "Hang", category: "web", sourceClass: "discovery", dataOrigin: "live",
       appliesTo: () => true,
       run: () => new Promise(() => {}), // never resolves
     };
@@ -64,7 +65,7 @@ describe("collectSearch — person, demo mode (offline)", () => {
   it("does not throw and yields a report for a business search", async () => {
     const input: SearchInput = { type: "business", businessName: "ABC Plumbing" };
     const report = await collectSearch(input, { demoMode: true });
-    expect(report.summary.sourcesChecked).toBeGreaterThan(0);
+    expect(report.providers.length).toBeGreaterThan(0);
   });
 });
 

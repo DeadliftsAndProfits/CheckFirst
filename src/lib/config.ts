@@ -16,7 +16,9 @@ function num(name: string, fallback: number): number {
 }
 
 export const config = {
-  demoMode: (process.env.CHECKFIRST_DEMO_MODE ?? "true").toLowerCase() === "true",
+  // Demo fixtures are OFF unless explicitly enabled. Production/default searches
+  // must never silently use fixtures (R3 §2).
+  demoMode: (process.env.CHECKFIRST_DEMO_MODE ?? "false").toLowerCase() === "true",
   isProduction: process.env.NODE_ENV === "production",
 
   google: {

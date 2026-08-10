@@ -16,6 +16,7 @@ export const demoIdentityProvider: Provider = {
   label: "Identity records (demo)",
   category: "identity",
   sourceClass: "discovery",
+  dataOrigin: "demo",
   appliesTo(ctx) {
     return ctx.input.type === "person";
   },
@@ -60,6 +61,7 @@ export const demoBusinessProvider: Provider = {
   label: "Business register (demo)",
   category: "business",
   sourceClass: "authoritative",
+  dataOrigin: "demo",
   appliesTo(ctx) {
     return ctx.input.type === "person" || ctx.input.type === "business";
   },
@@ -96,6 +98,7 @@ export const demoLicenceProvider: Provider = {
   label: "Trade licence (demo)",
   category: "licences",
   sourceClass: "authoritative",
+  dataOrigin: "demo",
   appliesTo(ctx) {
     return ctx.input.type === "person" || ctx.input.type === "business";
   },

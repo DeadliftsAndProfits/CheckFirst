@@ -26,6 +26,7 @@ export const dnsProvider: Provider = {
   label: "DNS & mail records",
   category: "website",
   sourceClass: "authoritative",
+  dataOrigin: "live",
   appliesTo(ctx) {
     return Boolean(targetDomain(ctx.normalised));
   },
