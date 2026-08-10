@@ -54,6 +54,8 @@ const PATHS: Record<string, React.ReactNode> = {
     </>
   ),
   x: <path d="M18 6 6 18M6 6l12 12" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />,
 };
 
 export function Icon({ name, size = 18, ...props }: { name: keyof typeof PATHS | string; size?: number } & SVGProps<SVGSVGElement>) {

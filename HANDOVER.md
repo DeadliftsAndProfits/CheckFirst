@@ -13,6 +13,53 @@ providers report `not_configured` honestly and are never faked.
 This is not a mock-up: the search card drives a real `POST /api/search` NDJSON stream, provider
 states are real, and DNS/TLS lookups hit the network.
 
+## Round 2 UX changes (2026-08-10)
+
+A focused UX revision — backend search, providers, orchestration, entity resolution and
+confidence were **preserved**; the frontend flow was restructured and the schema extended.
+
+- **Navigation / handoff.** The hero search card is now an *entry* tool. Pressing **Check first**
+  validates, stores the payload client-side (in memory + sessionStorage — deliberately **not** in
+  the URL, §10) via `src/lib/client/searchStore.ts`, and navigates to a dedicated **`/search`**
+  workspace which **auto-starts** the investigation (no second submit). Files:
+  `src/components/search/HeroSearch.tsx`, `src/app/search/page.tsx`.
+- **`/search` workspace.** Full application width: a "Checking <subject>" header, full-width live
+  active-search (real provider states via `LiveProgress`), then a two-column report (main results
+  + sticky "At a glance" aside with confidence, stat tiles, and notes). **Edit search** (compact
+  prefilled panel, preserves input) and **New search** (returns home) controls.
+- **Person form.** Default now: First name · Last name · **Known location** (compact suburb + state
+  control) · **Approximate age** (age bands: Not sure / Under 18 / 18–24 / … / 75+). All previous
+  optional fields remain behind "Add optional matching details" and still reach the backend.
+- **Business form.** Default simplified to Business/company name · **ABN / ACN** (combined field,
+  routed to `abn` or `acn` by digit count) · **Location**. Website / Phone / Email / ACN / postcode
+  moved behind optional disclosure.
+- **Phone & Email — dynamic arrays.** Half-width inputs on desktop with a `[+]` add control
+  (wraps to new rows), each added field removable (first is not), values preserved, max 5, empty
+  entries ignored. All entered values are validated and **all reach the backend** (`phones[]` /
+  `emails[]`). HIBP now checks every supplied email.
+- **Multi-value correlation (§16).** Multiple corroborated phones/emails raise identity confidence
+  via a per-extra-value bonus — but only when the *candidate record* independently carries them,
+  never merely because the user typed several. Unit-tested.
+- **Schema.** `SearchInput` gained `phones[]`, `emails[]`, `ageBand`; validation, query
+  generation, HIBP, confidence, and the API `sanitise()` all updated. Singular `phone`/`email`
+  remain supported (backwards compatible) and are merged into the arrays.
+- **Hero height stability.** Form body has a min-height; measured tab heights are 275–299px across
+  all five tabs (24px variance = the optional-details row) — no jarring reflow.
+- **Logo.** New mark: white tile, black magnifying glass, green tick (`src/components/Logo.tsx` +
+  `src/app/icon.svg` favicon). No prior mock-up asset existed in the repo, so it was built to spec.
+
+**Round 2 verification:** lint ✔ · typecheck ✔ · 55 unit+integration ✔ (incl. new multi-contact &
+corroboration tests) · prod build ✔ (6 routes, `/search` added) · **20 Playwright E2E ✔**
+(desktop + mobile — form layouts, multi-input add/remove/persist, hero→/search auto-run journey
+for Person and Website, New search). Visual inspection via real screenshots confirmed the Person
+"Known location" layout (fixed a suburb-input collapse bug where the State `<select>` inherited
+`w-full`), phone multi-input wrapping, the full-width report, and mobile stacking.
+
+Round 2 known limitations: multi-value confidence lift only shows with real providers that attach
+contact signals to candidates (demo/ABN attach business/ABN signals, not phones), so the effect is
+mostly latent until web-search/HIBP keys are configured; the "Edit search" panel re-runs the whole
+search rather than diffing.
+
 ### What was NOT delivered as mandated
 - **GSD orchestration.** The brief mandates the installed GSD skill. **GSD is not installed on
   this machine** (no skill/plugin/command; absent from the tool list). Rather than fabricate GSD

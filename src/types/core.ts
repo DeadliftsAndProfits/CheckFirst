@@ -17,9 +17,14 @@ export interface SearchInput {
   lastName?: string;
   middleName?: string;
   ageRange?: string;
+  ageBand?: string;
   // Shared contact / locality
   phone?: string;
   email?: string;
+  /** Multiple phone numbers (Phone tab, and any mode). Correlated together. */
+  phones?: string[];
+  /** Multiple email addresses (Email tab, and any mode). Correlated together. */
+  emails?: string[];
   address?: string;
   suburb?: string;
   state?: string;

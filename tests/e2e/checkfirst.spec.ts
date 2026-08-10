@@ -1,72 +1,117 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Check First — landing & search", () => {
+test.describe("Check First — landing hero (Round 2)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
   });
 
-  test("renders the hero and interactive search card", async ({ page }) => {
+  test("renders hero, logo and tabs", async ({ page }) => {
     await expect(page.getByRole("heading", { name: /Know before/i })).toBeVisible();
-    await expect(page.getByRole("tablist", { name: /what do you want to check/i })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Person" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /check first/i }).first()).toBeVisible();
+    await expect(page.getByRole("tablist", { name: /what do you want to check/i })).toBeVisible();
   });
 
-  test("switching tabs replaces the form fields", async ({ page }) => {
-    // Person shows first/last name.
+  test("Person default shows name, known location and approximate age", async ({ page }) => {
     await expect(page.getByLabel("First name")).toBeVisible();
-    // Switch to Phone — name fields disappear, phone field appears.
+    await expect(page.getByLabel("Last name")).toBeVisible();
+    await expect(page.getByLabel("Known location")).toBeVisible();
+    await expect(page.getByLabel("Approximate age")).toBeVisible();
+    // Age bands present.
+    await expect(page.getByLabel("Approximate age").locator("option", { hasText: "35–44" })).toHaveCount(1);
+    // Optional details hidden by default.
+    await expect(page.getByLabel("Employer")).toHaveCount(0);
+    await page.getByRole("button", { name: /add optional matching details/i }).click();
+    await expect(page.getByLabel("Employer")).toBeVisible();
+  });
+
+  test("switching tabs replaces the form (visual stability body present)", async ({ page }) => {
+    await expect(page.getByLabel("First name")).toBeVisible();
     await page.getByRole("tab", { name: "Phone" }).click();
     await expect(page.getByLabel("First name")).toHaveCount(0);
-    await expect(page.getByLabel("Phone number")).toBeVisible();
-    // Switch to Website.
+    await expect(page.getByPlaceholder("0412 345 678").first()).toBeVisible();
     await page.getByRole("tab", { name: "Website" }).click();
     await expect(page.getByLabel(/Website or domain/i)).toBeVisible();
   });
 
-  test("person optional details expander reveals more fields", async ({ page }) => {
-    await expect(page.getByLabel("Employer")).toHaveCount(0);
+  test("Business default is simplified; website/phone behind optional", async ({ page }) => {
+    await page.getByRole("tab", { name: "Business" }).click();
+    await expect(page.getByLabel("Business / company name")).toBeVisible();
+    await expect(page.getByLabel("ABN / ACN")).toBeVisible();
+    await expect(page.getByLabel("Location")).toBeVisible();
+    await expect(page.getByLabel("Website")).toHaveCount(0);
     await page.getByRole("button", { name: /add optional matching details/i }).click();
-    await expect(page.getByLabel("Employer")).toBeVisible();
-    await expect(page.getByLabel("Suburb / city")).toBeVisible();
+    await expect(page.getByLabel("Website")).toBeVisible();
+    await expect(page.getByLabel("Phone")).toBeVisible();
   });
 
-  test("client validation blocks an empty person search", async ({ page }) => {
+  test("Phone tab: add, remove, and value persistence", async ({ page }) => {
+    await page.getByRole("tab", { name: "Phone" }).click();
+    const first = page.getByPlaceholder("0412 345 678").nth(0);
+    await first.fill("0412 345 678");
+    await page.getByRole("button", { name: /add another/i }).click();
+    const second = page.getByPlaceholder("0412 345 678").nth(1);
+    await expect(second).toBeVisible();
+    await second.fill("07 3111 2222");
+    // Remove the second, first value persists.
+    await page.getByRole("button", { name: /remove/i }).first().click();
+    await expect(page.getByPlaceholder("0412 345 678")).toHaveCount(1);
+    await expect(page.getByPlaceholder("0412 345 678").first()).toHaveValue("0412 345 678");
+  });
+
+  test("Email tab mirrors the multi-input pattern", async ({ page }) => {
+    await page.getByRole("tab", { name: "Email" }).click();
+    await page.getByPlaceholder("john@example.com").first().fill("a@example.com");
+    await page.getByRole("button", { name: /add another/i }).click();
+    await expect(page.getByPlaceholder("john@example.com")).toHaveCount(2);
+  });
+
+  test("empty person search is blocked client-side", async ({ page }) => {
     await page.getByRole("button", { name: /^check first$/i }).click();
     await expect(page.getByText(/First name is required/i)).toBeVisible();
+    await expect(page).toHaveURL("/");
   });
+});
 
-  test("runs a person search and shows live progress then a report", async ({ page }) => {
+test.describe("Hero → dedicated /search journey (§21)", () => {
+  test("Person search hands off, auto-runs, and shows a full-width report", async ({ page }) => {
+    await page.goto("/");
     await page.getByLabel("First name").fill("John");
     await page.getByLabel("Last name").fill("Smith");
-    await page.getByRole("button", { name: /add optional matching details/i }).click();
-    await page.getByLabel("Suburb / city").fill("Brisbane");
-    await page.getByLabel("Employer").fill("ABC Plumbing");
-
+    await page.getByLabel("Known location").fill("Brisbane");
     await page.getByRole("button", { name: /^check first$/i }).click();
 
-    // The search transitions into the live experience and then a report. The
-    // offline demo can resolve sub-second, so accept either the transient
-    // "Searching…" state or the finished report.
-    await expect(page.getByText(/Searching public sources|Sources checked/i).first()).toBeVisible({ timeout: 10_000 });
+    // Navigation occurred; homepage does NOT contain the results.
+    await expect(page).toHaveURL(/\/search$/);
+    await expect(page.getByRole("heading", { name: "John Smith", level: 1 })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/^Checking$/)).toBeVisible({ timeout: 10_000 });
 
-    // Report resolves.
+    // Auto-started: progress or report (no second submit).
     await expect(page.getByRole("heading", { name: "Sources checked" })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/identity confidence/i).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Demo data").first()).toBeVisible({ timeout: 10_000 });
-    // Honest source states are shown.
-    await expect(page.getByText(/Not configured/i).first()).toBeVisible({ timeout: 10_000 });
-
-    // New search resets back to the form.
-    await page.getByRole("button", { name: /new search/i }).click();
-    await expect(page.getByLabel("First name")).toBeVisible();
+    // Edit / New controls exist.
+    await expect(page.getByRole("button", { name: /edit search/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /new search/i })).toBeVisible();
   });
 
-  test("website search validates a bad domain", async ({ page }) => {
+  test("Website search hands off and runs real checks", async ({ page }) => {
+    await page.goto("/");
     await page.getByRole("tab", { name: "Website" }).click();
-    await page.getByLabel(/Website or domain/i).fill("not a domain");
+    await page.getByLabel(/Website or domain/i).fill("example.com");
     await page.getByRole("button", { name: /^check first$/i }).click();
-    // Either client or server rejects it; an error message should surface.
-    await expect(page.getByText(/valid|required|fix/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(/\/search$/);
+    await expect(page.getByRole("heading", { name: "example.com", level: 1 })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Sources checked" })).toBeVisible({ timeout: 25_000 });
+  });
+
+  test("New search returns to the homepage", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("First name").fill("Jane");
+    await page.getByLabel("Last name").fill("Doe");
+    await page.getByRole("button", { name: /^check first$/i }).click();
+    await expect(page).toHaveURL(/\/search$/);
+    await page.getByRole("button", { name: /new search/i }).click();
+    await expect(page).toHaveURL("/");
+    await expect(page.getByRole("heading", { name: /Know before/i })).toBeVisible();
   });
 });

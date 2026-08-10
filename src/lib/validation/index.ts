@@ -4,6 +4,10 @@
  * Returns per-field errors (for the form), a flat normalised map (for the
  * report's "what we searched" panel and source transparency), and the set of
  * entity signals the confidence engine will use.
+ *
+ * Round 2: supports multiple phones (`phones[]`) and emails (`emails[]`) in any
+ * mode, plus an approximate `ageBand`. Singular `phone`/`email` remain supported
+ * for backwards compatibility and are merged into the arrays.
  */
 import type { SearchInput, EntitySignal } from "@/types/core";
 import { normalisePhone } from "./phone";
@@ -25,8 +29,16 @@ export interface ValidationOutput {
   signals: EntitySignal[];
 }
 
+const MAX_CONTACTS = 5;
+
 function add(signals: EntitySignal[], kind: EntitySignal["kind"], value?: string) {
   if (value) signals.push({ kind, value });
+}
+
+/** Merge singular + array contact fields, trim, drop blanks, cap, dedupe. */
+function mergeContacts(singular?: string, array?: string[]): string[] {
+  const all = [singular ?? "", ...(array ?? [])].map((s) => (s ?? "").trim()).filter(Boolean);
+  return [...new Set(all)].slice(0, MAX_CONTACTS);
 }
 
 export function validateAndNormalise(input: SearchInput): ValidationOutput {
@@ -34,24 +46,62 @@ export function validateAndNormalise(input: SearchInput): ValidationOutput {
   const normalised: Record<string, string> = {};
   const signals: EntitySignal[] = [];
 
-  // Optional shared fields (used by several modes).
-  const applyOptional = () => {
-    if (input.phone) {
-      const p = normalisePhone(input.phone);
-      if (!p.valid) errors.phone = p.reason ?? "Invalid phone";
-      else {
-        normalised.phone = p.display ?? p.national ?? p.e164 ?? input.phone;
-        add(signals, "phone", p.e164 ?? p.national);
+  const phones = mergeContacts(input.phone, input.phones);
+  const emails = mergeContacts(input.email, input.emails);
+
+  /** Normalise every supplied phone; record signals; report invalids. */
+  const processPhones = (required: boolean) => {
+    const displays: string[] = [];
+    let firstE164: string | undefined;
+    let anyValid = false;
+    phones.forEach((raw, i) => {
+      const p = normalisePhone(raw);
+      if (!p.valid) {
+        errors[i === 0 ? "phone" : `phone${i}`] = p.reason ?? "Invalid phone";
+        return;
       }
+      anyValid = true;
+      const display = p.display ?? p.national ?? p.e164 ?? raw;
+      displays.push(display);
+      if (!firstE164) firstE164 = p.e164 ?? p.national;
+      add(signals, "phone", p.e164 ?? p.national);
+      if (p.region && !normalised.region) normalised.region = p.region;
+    });
+    if (displays.length) {
+      normalised.phone = displays[0];
+      normalised.phones = displays.join(", ");
+      if (firstE164) normalised.phoneE164 = firstE164;
     }
-    if (input.email) {
-      const e = normaliseEmail(input.email);
-      if (!e.valid) errors.email = e.reason ?? "Invalid email";
-      else {
-        normalised.email = e.normalised!;
-        add(signals, "email", e.normalised);
+    if (required && !anyValid && !Object.keys(errors).some((k) => k.startsWith("phone"))) {
+      errors.phone = "Enter a valid phone number";
+    }
+  };
+
+  /** Normalise every supplied email; record signals; report invalids. */
+  const processEmails = (required: boolean) => {
+    const list: string[] = [];
+    emails.forEach((raw, i) => {
+      const e = normaliseEmail(raw);
+      if (!e.valid) {
+        errors[i === 0 ? "email" : `email${i}`] = e.reason ?? "Invalid email";
+        return;
       }
+      list.push(e.normalised!);
+      if (!normalised.emailDomain) normalised.emailDomain = e.domain!;
+      add(signals, "email", e.normalised);
+    });
+    if (list.length) {
+      normalised.email = list[0];
+      normalised.emails = list.join(", ");
     }
+    if (required && !list.length && !Object.keys(errors).some((k) => k.startsWith("email"))) {
+      errors.email = "Enter a valid email";
+    }
+  };
+
+  const applyCommon = () => {
+    processPhones(false);
+    processEmails(false);
     if (input.abn) {
       const a = normaliseAbn(input.abn);
       if (!a.valid) errors.abn = a.reason ?? "Invalid ABN";
@@ -73,6 +123,7 @@ export function validateAndNormalise(input: SearchInput): ValidationOutput {
       if (!w.valid) errors.website = w.reason ?? "Invalid website";
       else {
         normalised.website = w.hostname!;
+        if (w.domain) normalised.domain = w.domain;
         add(signals, "website", w.hostname);
       }
     }
@@ -114,7 +165,7 @@ export function validateAndNormalise(input: SearchInput): ValidationOutput {
       if (!t.valid) errors.username = "Invalid username";
       else {
         normalised.username = t.value!;
-        add(signals, "username", t.value!.toLowerCase());
+        add(signals, "username", t.value!.replace(/^@/, "").toLowerCase());
       }
     }
     if (input.middleName) {
@@ -125,7 +176,7 @@ export function validateAndNormalise(input: SearchInput): ValidationOutput {
         add(signals, "middleName", n.key);
       }
     }
-    if (input.ageRange) normalised.ageRange = input.ageRange.trim();
+    if (input.ageBand && input.ageBand !== "Not sure") normalised.ageBand = input.ageBand.trim();
   };
 
   switch (input.type) {
@@ -140,43 +191,28 @@ export function validateAndNormalise(input: SearchInput): ValidationOutput {
         normalised.fullName = `${first.display} ${last.display}`;
         add(signals, "name", `${first.key} ${last.key}`);
       }
-      applyOptional();
+      applyCommon();
       break;
     }
     case "business": {
-      applyOptional();
+      applyCommon();
       const hasAnything =
-        normalised.businessName ||
-        normalised.abn ||
-        normalised.acn ||
-        normalised.phone ||
-        normalised.email ||
-        normalised.website;
+        normalised.businessName || normalised.abn || normalised.acn || normalised.phone || normalised.email || normalised.website;
       if (!hasAnything && !errors.businessName) {
         errors.businessName = "Enter a business name, ABN, ACN, phone, email or website";
       }
       break;
     }
     case "phone": {
-      const p = normalisePhone(input.phone ?? "");
-      if (!p.valid) errors.phone = p.reason ?? "Enter a valid phone number";
-      else {
-        normalised.phone = p.display ?? p.national ?? p.e164!;
-        if (p.e164) normalised.phoneE164 = p.e164;
-        if (p.region) normalised.region = p.region;
-        normalised.phoneKind = p.kind;
-        add(signals, "phone", p.e164 ?? p.national);
+      processPhones(true);
+      if (normalised.phone) {
+        const p = normalisePhone(input.phones?.[0] ?? input.phone ?? "");
+        if (p.kind) normalised.phoneKind = p.kind;
       }
       break;
     }
     case "email": {
-      const e = normaliseEmail(input.email ?? "");
-      if (!e.valid) errors.email = e.reason ?? "Enter a valid email";
-      else {
-        normalised.email = e.normalised!;
-        normalised.emailDomain = e.domain!;
-        add(signals, "email", e.normalised);
-      }
+      processEmails(true);
       break;
     }
     case "website": {

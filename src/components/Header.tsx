@@ -1,16 +1,11 @@
-import { Icon } from "./Icon";
+import { Logo } from "./Logo";
 
 export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-        <a href="#top" className="flex items-center gap-2" aria-label="Check First home">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
-            <Icon name="shield" size={18} />
-          </span>
-          <span className="text-lg font-bold tracking-tight text-ink">
-            Check<span className="text-brand-600">First</span>
-          </span>
+        <a href="#top" aria-label="Check First home">
+          <Logo />
         </a>
         <nav className="hidden items-center gap-6 text-sm font-medium text-ink-muted md:flex">
           <a href="#how" className="hover:text-ink">How it works</a>

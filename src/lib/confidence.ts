@@ -79,24 +79,40 @@ export function scoreConfidence(userSignals: EntitySignal[], candidateSignals: E
     candByKind.get(s.kind)!.add(norm(s.value));
   }
 
-  const seenKinds = new Set<string>();
+  // Extra credit per ADDITIONAL independently-corroborated value (multi-value
+  // kinds only). Confidence rises from independent evidence, never merely
+  // because the user typed several values (§16).
+  const CORROBORATION_BONUS: Partial<Record<EntitySignal["kind"], number>> = { phone: 10, email: 10 };
+
+  // Group the user's signals by kind → unique values.
+  const userByKind = new Map<EntitySignal["kind"], string[]>();
   for (const us of userSignals) {
-    if (seenKinds.has(us.kind)) continue; // one line per kind
-    seenKinds.add(us.kind);
-    const candValues = candByKind.get(us.kind);
+    const arr = userByKind.get(us.kind) ?? [];
+    if (!arr.includes(norm(us.value))) arr.push(norm(us.value));
+    userByKind.set(us.kind, arr);
+  }
+
+  for (const [kind, values] of userByKind) {
+    const candValues = candByKind.get(kind);
     if (!candValues) {
-      evidence.push({ polarity: "unknown", label: `${LABEL[us.kind]} not available on this record` });
+      evidence.push({ polarity: "unknown", label: `${LABEL[kind]} not available on this record` });
       continue;
     }
-    if (candValues.has(norm(us.value))) {
-      score += WEIGHT[us.kind];
-      evidence.push({ polarity: "match", label: `${LABEL[us.kind]} matches` });
+    const matched = values.filter((v) => candValues.has(v));
+    if (matched.length) {
+      const bonus = (matched.length - 1) * (CORROBORATION_BONUS[kind] ?? 0);
+      score += WEIGHT[kind] + bonus;
+      const many = matched.length > 1;
+      evidence.push({
+        polarity: "match",
+        label: many ? `${matched.length} ${LABEL[kind]}s independently match` : `${LABEL[kind]} matches`,
+      });
     } else {
-      const penalty = CONFLICT[us.kind] ?? 0;
+      const penalty = CONFLICT[kind] ?? 0;
       score -= penalty;
       evidence.push({
         polarity: penalty ? "conflict" : "unknown",
-        label: penalty ? `${LABEL[us.kind]} differs` : `${LABEL[us.kind]} not confirmed`,
+        label: penalty ? `${LABEL[kind]} differs` : `${LABEL[kind]} not confirmed`,
       });
     }
   }

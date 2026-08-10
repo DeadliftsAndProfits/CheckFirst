@@ -35,10 +35,19 @@ export function googleSearchUrl(query: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
+function contactList(joined?: string, single?: string): string[] {
+  return (joined ?? single ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** Build the raw query strings a web-search API should run. Deduped, capped. */
 export function generateQueries(input: SearchInput, n: Record<string, string>): string[] {
   const q = new Set<string>();
   const loc = [n.suburb, n.state].filter(Boolean).join(" ");
+  const phoneList = contactList(n.phones, n.phone);
+  const emailList = contactList(n.emails, n.email);
 
   switch (input.type) {
     case "person": {
@@ -50,8 +59,8 @@ export function generateQueries(input: SearchInput, n: Record<string, string>): 
         if (n.businessName) q.add(`${quote(name)} ${quote(n.businessName)}`);
         if (n.occupation) q.add(`${quote(name)} ${n.occupation}`);
       }
-      if (n.email) q.add(quote(n.email));
-      for (const v of n.phone ? phoneVariants(n.phone) : []) q.add(quote(v));
+      for (const e of emailList) q.add(quote(e));
+      for (const p of phoneList) for (const v of phoneVariants(p)) q.add(quote(v));
       break;
     }
     case "business": {
@@ -64,18 +73,18 @@ export function generateQueries(input: SearchInput, n: Record<string, string>): 
       }
       if (n.abn) q.add(`${quote(n.abn)} ABN`);
       if (n.website) q.add(quote(n.website));
-      if (n.email) q.add(quote(n.email));
-      for (const v of n.phone ? phoneVariants(n.phone) : []) q.add(quote(v));
+      for (const e of emailList) q.add(quote(e));
+      for (const p of phoneList) for (const v of phoneVariants(p)) q.add(quote(v));
       break;
     }
     case "phone": {
-      for (const v of phoneVariants(n.phone ?? "")) q.add(quote(v));
+      for (const p of phoneList) for (const v of phoneVariants(p)) q.add(quote(v));
       break;
     }
     case "email": {
-      if (n.email) {
-        q.add(quote(n.email));
-        const handle = n.email.split("@")[0];
+      for (const e of emailList) {
+        q.add(quote(e));
+        const handle = e.split("@")[0];
         if (handle && handle.length > 2) q.add(quote(handle));
       }
       break;

@@ -30,14 +30,23 @@ function sanitise(body: unknown): SearchInput | null {
   if (typeof type !== "string" || !VALID_TYPES.includes(type as SearchType)) return null;
 
   const out: Record<string, string> = {};
+  const arrays: Record<string, string[]> = {};
+  const ARRAY_FIELDS = new Set(["phones", "emails"]);
   for (const [k, v] of Object.entries(b)) {
     if (k === "type") continue;
     if (typeof v === "string") {
       const trimmed = v.slice(0, 200);
       if (trimmed.trim()) out[k] = trimmed;
+    } else if (ARRAY_FIELDS.has(k) && Array.isArray(v)) {
+      const cleaned = v
+        .filter((x): x is string => typeof x === "string")
+        .map((x) => x.slice(0, 200))
+        .filter((x) => x.trim())
+        .slice(0, 5);
+      if (cleaned.length) arrays[k] = cleaned;
     }
   }
-  return { type: type as SearchType, ...out };
+  return { type: type as SearchType, ...out, ...arrays };
 }
 
 export async function POST(req: NextRequest) {

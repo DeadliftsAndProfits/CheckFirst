@@ -27,55 +27,67 @@ export const hibpProvider: Provider = {
     return Boolean(ctx.normalised.email);
   },
   async run(ctx: ProviderContext) {
-    const email = ctx.normalised.email!;
+    const emails = (ctx.normalised.emails ?? ctx.normalised.email ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    const query = emails.join(", ");
     if (!config.hibp.configured) {
       return notConfigured(
         hibpProvider,
-        email,
+        query,
         "Breach-status needs a Have I Been Pwned API key (HIBP_API_KEY). Only breach names/dates are ever shown — never passwords.",
       );
     }
+
+    const items: ResultItem[] = [];
+    const warnings: string[] = [];
+    let sawError = false;
     try {
-      const url = `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`;
-      const res = await fetchWithTimeout(url, {
-        timeoutMs: 8000,
-        parentSignal: ctx.signal,
-        headers: { "hibp-api-key": config.hibp.apiKey, Accept: "application/json" },
-      });
-      if (res.status === 404) {
-        return buildResult({
-          provider: hibpProvider,
-          status: "no_results",
-          query: email,
-          warnings: ["No public breaches found for this address"],
+      for (const email of emails) {
+        const url = `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`;
+        const res = await fetchWithTimeout(url, {
+          timeoutMs: 8000,
+          parentSignal: ctx.signal,
+          headers: { "hibp-api-key": config.hibp.apiKey, Accept: "application/json" },
         });
+        if (res.status === 404) continue; // no breaches for this address
+        if (res.status === 401) {
+          return buildResult({ provider: hibpProvider, status: "not_configured", query, warnings: ["HIBP API key rejected"] });
+        }
+        if (!res.ok) {
+          warnings.push(`${email}: HIBP HTTP ${res.status}`);
+          sawError = true;
+          continue;
+        }
+        const breaches = (await res.json()) as Breach[];
+        for (const b of breaches.slice(0, 20)) {
+          items.push({
+            title: b.Title,
+            detail: `${emails.length > 1 ? email + " — " : ""}reported breach dated ${b.BreachDate}. Exposed data types: ${(b.DataClasses ?? []).join(", ")}.`,
+            sourceClass: "authoritative",
+            sourceUrl: "https://haveibeenpwned.com/",
+            fields: { Address: email, Breach: b.Title, Date: b.BreachDate, "Data types": (b.DataClasses ?? []).join(", ") },
+          });
+        }
       }
-      if (res.status === 401) {
-        return buildResult({ provider: hibpProvider, status: "not_configured", query: email, warnings: ["HIBP API key rejected"] });
-      }
-      if (!res.ok) {
-        return buildResult({ provider: hibpProvider, status: "unavailable", query: email, warnings: [`HIBP HTTP ${res.status}`] });
-      }
-      const breaches = (await res.json()) as Breach[];
-      const items: ResultItem[] = breaches.slice(0, 20).map((b) => ({
-        title: b.Title,
-        detail: `Reported breach dated ${b.BreachDate}. Exposed data types: ${(b.DataClasses ?? []).join(", ")}.`,
-        sourceClass: "authoritative",
-        sourceUrl: `https://haveibeenpwned.com/PwnedwebsitesTitle`,
-        fields: { Breach: b.Title, Date: b.BreachDate, "Data types": (b.DataClasses ?? []).join(", ") },
-      }));
-      return ok(hibpProvider, email, items, {
-        sourceAuthority: "Have I Been Pwned",
-        cacheSeconds: 6 * 3600,
-        warnings: ["Breach status reflects third-party incidents, not this person's conduct"],
-      });
     } catch (err) {
+      return buildResult({ provider: hibpProvider, status: "error", query, error: err instanceof Error ? err.message : "HIBP request failed" });
+    }
+
+    if (!items.length) {
       return buildResult({
         provider: hibpProvider,
-        status: "error",
-        query: email,
-        error: err instanceof Error ? err.message : "HIBP request failed",
+        status: sawError ? "unavailable" : "no_results",
+        query,
+        warnings: sawError ? warnings : ["No public breaches found for the supplied address(es)"],
       });
     }
+    return ok(hibpProvider, query, items, {
+      sourceAuthority: "Have I Been Pwned",
+      cacheSeconds: 6 * 3600,
+      warnings: ["Breach status reflects third-party incidents, not this person's conduct", ...warnings],
+    });
   },
 };

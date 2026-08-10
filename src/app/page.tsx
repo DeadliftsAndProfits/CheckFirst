@@ -1,5 +1,5 @@
 import { Header } from "@/components/Header";
-import { SearchExperience } from "@/components/search/SearchExperience";
+import { HeroSearch } from "@/components/search/HeroSearch";
 import { Icon } from "@/components/Icon";
 
 const INDICATORS = [
@@ -86,7 +86,7 @@ export default function Home() {
           {/* Right: interactive search card */}
           <div className="animate-fade-up">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-lift sm:p-6">
-              <SearchExperience />
+              <HeroSearch />
             </div>
           </div>
         </div>
