@@ -169,7 +169,7 @@ export function SearchForm({
 
   return (
     <div>
-      <div role="tablist" aria-label="What do you want to check?" className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
+      <div role="tablist" aria-label="What do you want to check?" className="flex flex-wrap gap-1 rounded-2xl bg-slate-100/80 p-1.5 ring-1 ring-slate-200/70">
         {TAB_META.map((t) => (
           <button
             key={t.id}
@@ -177,8 +177,8 @@ export function SearchForm({
             aria-selected={tab === t.id}
             disabled={busy}
             onClick={() => switchTab(t.id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-              tab === t.id ? "bg-white text-brand-700 shadow-sm" : "text-ink-muted hover:text-ink"
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 py-2.5 text-sm font-semibold transition-all duration-200 disabled:opacity-50 ${
+              tab === t.id ? "bg-white text-brand-700 shadow-soft ring-1 ring-black/[0.03]" : "text-ink-muted hover:bg-white/60 hover:text-ink"
             }`}
           >
             <Icon name={t.icon} size={16} />
@@ -221,16 +221,29 @@ export function SearchForm({
         </div>
 
         {optionalFields.length > 0 && (
-          <div className="mt-3">
+          <div className="mt-4">
             {!advanced && (
-              <button type="button" onClick={() => setShowOptional((v) => !v)} aria-expanded={showOptional} className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700">
-                <Icon name="chevron" size={16} className={`transition-transform ${showOptional ? "rotate-180" : ""}`} />
-                {optionalLabel}
+              <button
+                type="button"
+                onClick={() => setShowOptional((v) => !v)}
+                aria-expanded={showOptional}
+                className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition-colors ${
+                  showOptional ? "border-brand-200 bg-brand-50/60 text-brand-700" : "border-slate-200 bg-white text-ink-soft hover:border-slate-300"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${showOptional ? "bg-brand-600 text-white" : "bg-slate-100 text-brand-600"}`}>
+                    <Icon name="plus" size={14} className={showOptional ? "rotate-45 transition-transform" : "transition-transform"} />
+                  </span>
+                  {optionalLabel}
+                </span>
+                <Icon name="chevron" size={16} className={`text-slate-400 transition-transform ${showOptional ? "rotate-180" : ""}`} />
               </button>
             )}
             {(showOptional || advanced) && (
-              <div className={advanced ? "mt-2" : "mt-3 animate-fade-up"}>
-                {advanced && <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Additional matching information</p>}
+              <div className={`mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 ${advanced ? "" : "animate-fade-up"}`}>
+                <p className="eyebrow mb-0.5 text-brand-600">Optional matching details</p>
+                <p className="mb-3 text-xs text-ink-muted">What else do you know that can help us identify the right match?</p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {optionalFields.map((f) =>
                     f.name === "state" ? (
@@ -249,12 +262,13 @@ export function SearchForm({
         <button
           type="submit"
           disabled={busy}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60"
+          className="group mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-4 py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(37,99,235,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glow focus-visible:ring-4 focus-visible:ring-brand-500/30 disabled:translate-y-0 disabled:opacity-60"
         >
           <Icon name="search" size={18} /> {submitLabel}
+          <Icon name="arrowRight" size={17} className="transition-transform duration-200 group-hover:translate-x-0.5" />
         </button>
-        <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-ink-muted">
-          <Icon name="shield" size={13} /> Public information only · the person is not notified
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-ink-muted">
+          <Icon name="lock" size={13} className="text-accent-600" /> Public information only · the person is not notified
         </p>
       </form>
     </div>

@@ -125,6 +125,19 @@ E2E ✔** (desktop + mobile, incl. New/Edit search flows) · real network audit 
   handoff already keeps identifiers out of the URL safely (documented decision).
 - `webcontent` only sees server-rendered HTML; SPA-only sites won't expose their content.
 
+## Round 4 — Premium UI/UX redesign (2026-08-11)
+
+A visual-only overhaul; no product logic, routes, schema, search behaviour or functionality
+changed. Introduced a real design system (navy / electric-blue / teal-aqua tokens, premium
+shadow/radius/motion scales in `tailwind.config.ts` + CSS tokens/utilities in `globals.css`),
+redesigned the navigation (glass sticky), hero and search panel (the visual focal point, with a
+clearly-secondary nested "optional matching" layer), and gave each landing section its own identity
+— including a dark "intelligence" band with an abstract source-correlation graphic
+(`src/components/marketing/SourceGraph.tsx`, illustrative only). The `/search` workspace inherits
+the tokens for consistency. Verified: lint ✔ · typecheck ✔ · 58 unit+integration ✔ · prod build ✔ ·
+**22 Playwright E2E ✔** (all tabs, optional details, FAQ, nav, New/Edit search preserved) ·
+screenshots at desktop / tablet / mobile ✔. No functionality was changed or removed.
+
 ### What was NOT delivered as mandated
 - **GSD orchestration.** The brief mandates the installed GSD skill. **GSD is not installed on
   this machine** (no skill/plugin/command; absent from the tool list). Rather than fabricate GSD

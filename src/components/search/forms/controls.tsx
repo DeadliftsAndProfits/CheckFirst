@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 
 const inputCls = (error?: boolean) =>
-  `w-full rounded-lg border bg-white px-3 py-2.5 text-[15px] text-ink outline-none transition-colors placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 ${
-    error ? "border-rose-400" : "border-slate-300"
+  `w-full rounded-xl border bg-white px-3.5 py-3 text-[15px] text-ink shadow-[inset_0_1px_2px_rgba(9,17,31,0.03)] outline-none transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-500 focus:ring-4 ${
+    error ? "border-rose-400 focus:ring-rose-400/15" : "border-slate-200 focus:ring-brand-500/12"
   }`;
 
 export function FieldShell({
@@ -24,9 +24,9 @@ export function FieldShell({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink-soft">
+      <label htmlFor={id} className="mb-1.5 block text-[13px] font-semibold text-ink-soft">
         {label}
-        {required && <span className="text-rose-500"> *</span>}
+        {required && <span className="text-brand-500"> *</span>}
       </label>
       {children}
       {hint && !error && <p className="mt-1 text-xs text-ink-muted">{hint}</p>}

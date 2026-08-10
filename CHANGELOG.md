@@ -5,6 +5,36 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-08-11
+
+Premium visual overhaul of the front end. Pure presentation layer — no product logic, routes,
+search behaviour, forms or functionality changed. All 22 Playwright E2E, 58 unit+integration
+tests, lint, typecheck and the production build pass; verified at desktop, tablet and mobile.
+
+### Added
+- A proper design system: navy / electric-blue / teal-aqua token palette, premium shadow scale
+  (soft / card / lift / glow), larger radii, refined typography and motion tokens in Tailwind, plus
+  CSS design tokens and reusable utilities (`text-gradient`, `glass`, `eyebrow`, entrance reveals).
+- Abstract "public-source correlation" graphic (`SourceGraph`) for a new dark intelligence section —
+  illustrative only, no data claims.
+- Distinct visual identity per section: source-credibility strip, connected 3-step process flow,
+  capability grid with hover states, personality use-case cards, dark intelligence band, privacy
+  "trust architecture" split, refined FAQ accordion, and a strong dark gradient final CTA.
+
+### Changed
+- Hero: dramatically larger gradient headline, refined trust indicators, and a premium elevated
+  search panel ("Start a trust search") as the page's visual focal point.
+- Search form: refined segmented tabs with an unmistakable active state, larger inputs with premium
+  focus rings, a gradient submit, and the optional fields restyled as a clearly-secondary nested
+  "matching layer" with animated expansion.
+- Navigation: translucent glass sticky header with a gradient primary CTA.
+- Page rhythm now alternates light and dark surfaces instead of repeating identical white cards.
+- `/search` workspace inherits the new tokens (glass header, premium form) for a cohesive look.
+
+### Preserved
+- All five search tabs, optional matching details, multi phone/email inputs, FAQ accordions,
+  navigation anchors, the hero→/search handoff, New/Edit search, and demo/real search behaviour.
+
 ## [0.3.0] — 2026-08-10
 
 Integrity round — make the search real and represent every source honestly. Backend providers,
