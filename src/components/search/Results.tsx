@@ -1,293 +1,464 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import type { Candidate, ProviderResult, ProviderStatus, DataOrigin, SearchReport } from "@/types/core";
 import { Icon } from "@/components/Icon";
 
-const STATUS_META: Record<ProviderStatus, { label: string; cls: string }> = {
-  queued: { label: "Queued", cls: "bg-slate-100 text-slate-600" },
-  searching: { label: "Searching", cls: "bg-brand-50 text-brand-700" },
-  complete: { label: "Results found", cls: "bg-emerald-50 text-emerald-700" },
-  no_results: { label: "No results", cls: "bg-slate-100 text-slate-500" },
-  unavailable: { label: "Unavailable", cls: "bg-amber-50 text-amber-700" },
-  not_configured: { label: "Not configured", cls: "bg-amber-50 text-amber-700" },
-  error: { label: "Error", cls: "bg-rose-50 text-rose-700" },
-  rate_limited: { label: "Rate limited", cls: "bg-amber-50 text-amber-700" },
+/* ---------------------------------- bits ---------------------------------- */
+
+function initialsOf(name: string): string {
+  const clean = name.replace(/https?:\/\//g, "").replace(/[^a-zA-Z0-9 ]/g, " ").trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (!parts.length) return "CF";
+  return (parts[0][0] + (parts[1]?.[0] ?? parts[0][1] ?? "")).toUpperCase();
+}
+
+function StatusPill({ tone, children }: { tone: "good" | "warn" | "neutral" | "info"; children: React.ReactNode }) {
+  const cls =
+    tone === "good" ? "bg-accent-50 text-accent-600" : tone === "warn" ? "bg-amber-50 text-amber-700" : tone === "info" ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-ink-muted";
+  return <span className={`whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${cls}`}>{children}</span>;
+}
+
+const ORIGIN_META: Partial<Record<DataOrigin, { t: string; c: string }>> = {
+  live: { t: "LIVE", c: "bg-accent-100 text-accent-600" },
+  link: { t: "LINK", c: "bg-slate-100 text-slate-500" },
+  local_dataset: { t: "LOCAL", c: "bg-indigo-100 text-indigo-700" },
+  cached: { t: "CACHED", c: "bg-sky-100 text-sky-700" },
+  demo: { t: "DEMO", c: "bg-fuchsia-100 text-fuchsia-700" },
 };
-
-/** Honesty badge — where the data actually came from. */
-function classOf(p: { dataOrigin: DataOrigin; status: ProviderStatus }): { label: string; cls: string } {
-  if (p.status === "not_configured") return { label: "NEEDS CONFIG", cls: "bg-amber-100 text-amber-800" };
-  if (p.dataOrigin === "demo") return { label: "DEMO", cls: "bg-fuchsia-100 text-fuchsia-700" };
-  if (p.dataOrigin === "link") return { label: "LINKS", cls: "bg-slate-100 text-slate-500" };
-  if (p.dataOrigin === "cached") return { label: "CACHED", cls: "bg-sky-100 text-sky-700" };
-  if (p.dataOrigin === "local_dataset") return { label: "LOCAL DATA", cls: "bg-indigo-100 text-indigo-700" };
-  if (p.dataOrigin === "live") return { label: "LIVE", cls: "bg-emerald-100 text-emerald-700" };
-  return { label: "—", cls: "bg-slate-100 text-slate-400" };
+function OriginBadge({ p }: { p: ProviderResult }) {
+  const b = p.status === "not_configured" ? { t: "NEEDS CONFIG", c: "bg-amber-100 text-amber-800" } : ORIGIN_META[p.dataOrigin];
+  return b ? <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${b.c}`}>{b.t}</span> : null;
 }
 
-const CATEGORY_TITLES: Record<string, string> = {
-  identity: "Identity",
-  business: "Business & ABN",
-  licences: "Licences",
-  professional: "Professional & regulatory",
-  contact: "Contact associations",
-  online: "Online presence",
-  public_records: "Public records",
-  website: "Website & domain",
-  email: "Email",
-  web: "Web references",
-};
-
-const CATEGORY_ORDER = ["identity", "business", "licences", "professional", "website", "email", "web", "online", "public_records", "contact"];
-
-function DemoBadge() {
-  return <span className="ml-2 rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fuchsia-700">Demo data</span>;
-}
-
-function SourceBadge({ cls }: { cls: "authoritative" | "discovery" }) {
-  return cls === "authoritative" ? (
-    <span className="inline-flex items-center gap-1 rounded bg-trust-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-trust-600">
-      <Icon name="check" size={11} /> Authoritative
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Discovery</span>
-  );
-}
-
-function ConfidenceBar({ value }: { value: number }) {
-  const tone = value >= 70 ? "bg-trust-500" : value >= 40 ? "bg-amber-500" : "bg-slate-400";
+function Panel({ title, sub, pill, children }: { title: string; sub?: string; pill?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100" role="meter" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}>
-      <div className={`h-full ${tone} transition-all duration-700`} style={{ width: `${value}%` }} />
+    <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-soft">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[17px] font-bold tracking-tight text-ink">{title}</h3>
+          {sub && <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{sub}</p>}
+        </div>
+        {pill}
+      </div>
+      {children}
     </div>
   );
 }
 
-function CandidateCard({ c, rank }: { c: Candidate; rank: number }) {
+/** Render a provider's result items as premium data-list rows. */
+function ProviderBlock({ p }: { p: ProviderResult }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Possible match {rank}</p>
-          <h4 className="mt-0.5 text-lg font-semibold text-ink">
-            {c.displayName}
-            {c.demo && <DemoBadge />}
-          </h4>
-          {c.subtitle && <p className="text-sm text-ink-muted">{c.subtitle}</p>}
+    <div className="border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-bold text-ink">{p.providerLabel}</span>
+        <OriginBadge p={p} />
+        {p.sourceUrl && (
+          <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700">
+            Open source <Icon name="external" size={12} />
+          </a>
+        )}
+      </div>
+      {p.results.map((item, i) => (
+        <div key={i} className="mb-3 last:mb-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-ink-soft">{item.title}</span>
+            {item.demo && <span className="rounded bg-fuchsia-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-fuchsia-700">Demo</span>}
+          </div>
+          {item.detail && <p className="mt-0.5 text-sm text-ink-muted">{item.detail}</p>}
+          {item.fields && (
+            <dl className="mt-2 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+              {Object.entries(item.fields).map(([k, v]) => (
+                <div key={k} className="flex items-baseline justify-between gap-3 border-b border-slate-50 py-1">
+                  <dt className="shrink-0 text-xs text-ink-muted">{k}</dt>
+                  <dd className="text-right text-[13px] font-semibold text-ink">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </div>
-        <div className="shrink-0 text-right">
-          <div className="text-2xl font-bold text-ink">{c.confidence}%</div>
-          <div className="text-[11px] font-medium text-slate-400">identity confidence</div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-slate-200 bg-white/60 p-8 text-center">
+      <p className="text-sm text-ink-muted">{text}</p>
+    </div>
+  );
+}
+
+/* --------------------------------- score ---------------------------------- */
+
+function ScoreRing({ value }: { value: number | null }) {
+  const v = value ?? 0;
+  const col = value == null ? "#64748b" : v >= 70 ? "#14b8a6" : v >= 40 ? "#f59e0b" : "#94a3b8";
+  return (
+    <div
+      className="relative grid h-[92px] w-[92px] shrink-0 place-items-center rounded-full"
+      style={{ background: `conic-gradient(${col} 0 ${v}%, rgba(255,255,255,.14) ${v}% 100%)` }}
+    >
+      <div className="absolute inset-[8px] rounded-full bg-navy-800" />
+      <strong className="relative text-2xl font-extrabold tracking-tightest text-white">{value == null ? "—" : v}</strong>
+    </div>
+  );
+}
+
+/* -------------------------------- results --------------------------------- */
+
+const CAT_TO_TAB: Record<string, string> = {
+  identity: "overview",
+  business: "business",
+  licences: "licences",
+  professional: "licences",
+  website: "digital",
+  web: "digital",
+  online: "digital",
+  email: "contact",
+  contact: "contact",
+};
+const OPTIONAL_TABS = [
+  { id: "contact", label: "Contact & digital" },
+  { id: "business", label: "Business links" },
+  { id: "licences", label: "Licences" },
+  { id: "digital", label: "Digital footprint" },
+];
+
+export function Results({ report, candidates, subject }: { report: SearchReport; candidates: Candidate[]; subject: string }) {
+  const s = report.summary;
+  const top = candidates[0] ?? null;
+
+  const realComplete = useMemo(() => report.providers.filter((p) => p.status === "complete" && p.dataOrigin !== "link"), [report.providers]);
+  const linkProviders = useMemo(() => report.providers.filter((p) => p.dataOrigin === "link" && p.status === "complete"), [report.providers]);
+
+  // providers routed to each optional tab
+  const tabProviders = useMemo(() => {
+    const m: Record<string, ProviderResult[]> = { contact: [], business: [], licences: [], digital: [] };
+    for (const p of realComplete) {
+      const tab = CAT_TO_TAB[p.category];
+      if (tab && tab !== "overview" && m[tab]) m[tab].push(p);
+    }
+    return m;
+  }, [realComplete]);
+
+  const tabs = useMemo(
+    () => ["overview", ...OPTIONAL_TABS.filter((t) => tabProviders[t.id]?.length).map((t) => t.id), "sources"],
+    [tabProviders],
+  );
+  const tabLabel = (id: string) =>
+    id === "overview" ? "Overview" : id === "sources" ? "Source trail" : OPTIONAL_TABS.find((t) => t.id === id)?.label ?? id;
+
+  const [active, setActive] = useState("overview");
+  const activeTab = tabs.includes(active) ? active : "overview";
+
+  // identity badges (honest — only what's backed by real/demo findings)
+  const badges: string[] = [];
+  if (top) badges.push(top.confidence >= 70 ? "Identity likely matched" : "Possible match");
+  if (realComplete.concat(report.providers.filter((p) => p.dataOrigin === "demo" && p.status === "complete")).some((p) => p.category === "business")) badges.push("Business record found");
+  if (report.providers.some((p) => p.category === "licences" && p.status === "complete" && p.dataOrigin !== "link")) badges.push("Licence record");
+  if (realComplete.some((p) => p.category === "website")) badges.push("Website checked");
+  if (s.demo) badges.push("Demo data");
+
+  const matchSignals = top ? top.evidence.filter((e) => e.polarity === "match").length : 0;
+
+  // key findings (Overview) derived from real provider outcomes
+  const findings = useMemo(() => {
+    const out: { tone: "good" | "warn" | "info"; title: string; body: string }[] = [];
+    for (const p of realComplete.slice(0, 4)) out.push({ tone: "good", title: `${p.providerLabel} returned results`, body: p.results[0]?.title ?? "A public source matched this search." });
+    for (const p of report.providers.filter((x) => x.status === "not_configured").slice(0, 2)) out.push({ tone: "info", title: `${p.providerLabel} not checked`, body: p.warnings[0] ?? "This source needs configuration." });
+    for (const p of report.providers.filter((x) => x.status === "unavailable" || x.status === "error").slice(0, 1)) out.push({ tone: "warn", title: `${p.providerLabel} unavailable`, body: p.warnings[0] ?? p.error ?? "A source could not be reached." });
+    return out;
+  }, [realComplete, report.providers]);
+
+  const doubleChecks: string[] = [];
+  if (top) for (const e of top.evidence) if (e.polarity === "conflict") doubleChecks.push(`Conflicting ${e.label.toLowerCase()} between records.`);
+  for (const p of report.providers) if (p.status === "not_configured") doubleChecks.push(`${p.providerLabel} was not checked (${p.warnings[0] ?? "needs configuration"}).`);
+
+  return (
+    <div className="space-y-5">
+      {/* IDENTITY HERO */}
+      <div className="relative overflow-hidden rounded-4xl bg-gradient-to-br from-navy-900 via-navy-850 to-navy-700 p-6 text-white shadow-lift sm:p-7">
+        <div aria-hidden className="pointer-events-none absolute -right-40 -top-44 h-[360px] w-[360px] rounded-full border-[70px] border-white/[0.035]" />
+        <div className="relative grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+          <div className="flex items-center gap-4">
+            <div className="grid h-[70px] w-[70px] shrink-0 place-items-center rounded-[1.4rem] bg-gradient-to-br from-accent-100 to-accent-300 text-xl font-black text-navy-900">
+              {initialsOf(top?.displayName ?? subject)}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{top?.displayName ?? subject}</h2>
+              <p className="mt-1 text-sm leading-relaxed text-white/70">
+                {top?.subtitle ? `${top.subtitle} · ` : ""}
+                {top ? `${matchSignals} corroborating identity signal${matchSignals === 1 ? "" : "s"}` : "Public sources checked — review the evidence below"}
+              </p>
+              {badges.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {badges.map((b) => (
+                    <span key={b} className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-bold">
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 rounded-3xl border border-white/12 bg-white/[0.08] p-4">
+            <ScoreRing value={top ? top.confidence : null} />
+            <div>
+              <strong className="block text-sm font-bold">{top ? "Match confidence" : "No confident match"}</strong>
+              <span className="mt-1 block text-[11px] leading-relaxed text-white/65">
+                {top ? "How likely these records describe the same entity — not whether they can be trusted." : "Not enough corroborating public signals for a single confident match."}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-      <div className="mt-3">
-        <ConfidenceBar value={c.confidence} />
+
+      {/* SUMMARY STRIP */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryCard label="Sources searched" value={s.sourcesSearched} note={`${s.returnedResults} returned results`} />
+        <SummaryCard label="Possible matches" value={candidates.length} note={top ? `${top.confidence}% top match` : "review the evidence"} />
+        <SummaryCard label="Official links" value={s.links} note="open the source yourself" />
+        <SummaryCard label="To double-check" value={new Set(doubleChecks).size} note="verify before trusting" />
+      </div>
+
+      {s.demo && (
+        <p className="flex items-center gap-2 rounded-xl bg-fuchsia-50 px-3.5 py-2.5 text-sm text-fuchsia-800">
+          <Icon name="info" size={15} /> Demo mode is on — some results are clearly-labelled <strong>demo data</strong>, not real searches.
+        </p>
+      )}
+      {!s.demo && s.sourcesSearched === 0 && (
+        <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
+          <Icon name="alert" size={15} /> No source performed a live query for this search type. Configure ABN Lookup and a web-search key — or use the official links in the source trail.
+        </p>
+      )}
+
+      {/* RESULT TABS */}
+      <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Result sections">
+        {tabs.map((id) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={activeTab === id}
+            onClick={() => setActive(id)}
+            className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-bold transition-colors ${
+              activeTab === id ? "border-navy-900 bg-navy-900 text-white" : "border-slate-200 bg-white text-ink-muted hover:border-slate-300 hover:text-ink"
+            }`}
+          >
+            {tabLabel(id)}
+          </button>
+        ))}
+      </div>
+
+      {/* OVERVIEW */}
+      {activeTab === "overview" && (
+        <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-5">
+            <Panel title="Possible matches" sub="Records that may describe the same entity, ranked by identity confidence." pill={<StatusPill tone={top ? "good" : "neutral"}>{candidates.length} found</StatusPill>}>
+              {candidates.length ? (
+                <div className="space-y-3">
+                  {candidates.map((c, i) => (
+                    <CandidateRow key={c.id} c={c} rank={i + 1} />
+                  ))}
+                  <p className="text-xs text-ink-muted">Confidence = how likely these records describe the same entity, not whether they can be trusted.</p>
+                </div>
+              ) : (
+                <EmptyState text="No single confident match was assembled from the sources searched. Review the source trail and official links." />
+              )}
+            </Panel>
+
+            <Panel title="Key findings" sub="Signals worth seeing before opening every source." pill={<StatusPill tone="neutral">{findings.length} signals</StatusPill>}>
+              {findings.length ? (
+                <div className="space-y-2.5">
+                  {findings.map((f, i) => (
+                    <Signal key={i} tone={f.tone} title={f.title} body={f.body} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState text="No source returned results for this search. Try adding matching details, or configure the sources noted below." />
+              )}
+            </Panel>
+          </div>
+
+          <div className="space-y-5">
+            <Panel title="What was checked" sub="Live queries and official-source links for this search." pill={<StatusPill tone="good">{report.providers.length} sources</StatusPill>}>
+              <div className="grid gap-2">
+                {report.providers.map((p) => (
+                  <div key={p.provider} className="flex items-center gap-2 text-sm">
+                    <Icon name={p.status === "complete" && p.dataOrigin !== "link" ? "check" : p.status === "not_configured" ? "alert" : "clock"} size={15} className={p.status === "complete" && p.dataOrigin !== "link" ? "text-accent-600" : p.status === "not_configured" ? "text-amber-500" : "text-slate-300"} />
+                    <span className="flex-1 truncate text-ink-soft">{p.providerLabel}</span>
+                    <OriginBadge p={p} />
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            {doubleChecks.length > 0 && (
+              <Panel title="Things to double-check" sub="Because a public record is evidence, not proof." pill={<StatusPill tone="warn">{new Set(doubleChecks).size}</StatusPill>}>
+                <ul className="list-disc space-y-1.5 pl-4 text-sm text-ink-muted">
+                  {[...new Set(doubleChecks)].map((d, i) => (
+                    <li key={i}>{d}</li>
+                  ))}
+                </ul>
+              </Panel>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* OPTIONAL DATA TABS */}
+      {OPTIONAL_TABS.map(
+        (t) =>
+          activeTab === t.id && (
+            <div key={t.id} className="grid gap-5">
+              {tabProviders[t.id].length ? (
+                <Panel title={t.label} sub="Public-source findings for this search.">
+                  <div className="space-y-4">
+                    {tabProviders[t.id].map((p) => (
+                      <ProviderBlock key={p.provider} p={p} />
+                    ))}
+                  </div>
+                </Panel>
+              ) : (
+                <EmptyState text="No findings in this section for this search." />
+              )}
+            </div>
+          ),
+      )}
+
+      {/* SOURCE TRAIL */}
+      {activeTab === "sources" && (
+        <div className="space-y-5">
+          {linkProviders.length > 0 && (
+            <Panel title="Official sources to check" sub="Check First did not search these — one-click links to official registers and public searches you can open yourself.">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {linkProviders.flatMap((p) =>
+                  p.results.map((item, i) => (
+                    <a key={`${p.provider}-${i}`} href={item.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-ink-soft transition-colors hover:border-brand-300 hover:bg-brand-50/40">
+                      <span className="truncate">{item.title}</span>
+                      <Icon name="external" size={13} className="shrink-0 text-brand-500" />
+                    </a>
+                  )),
+                )}
+              </div>
+            </Panel>
+          )}
+
+          <Panel title="Source trail" sub="Every source checked, its origin, status and how long it took.">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                    <th className="pb-2 font-bold">Source</th>
+                    <th className="pb-2 font-bold">Origin</th>
+                    <th className="pb-2 font-bold">Status</th>
+                    <th className="pb-2 font-bold">Took</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.providers.map((p) => (
+                    <tr key={p.provider} className="border-t border-slate-100">
+                      <td className="py-2.5 pr-3 font-semibold text-ink-soft">
+                        {p.sourceUrl ? (
+                          <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="text-brand-600 hover:underline">
+                            {p.providerLabel}
+                          </a>
+                        ) : (
+                          p.providerLabel
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <OriginBadge p={p} />
+                      </td>
+                      <td className="py-2.5 pr-3 text-xs font-semibold text-ink-muted">{STATUS_LABEL[p.status]}</td>
+                      <td className="py-2.5 text-xs text-slate-400">{typeof p.durationMs === "number" ? `${p.durationMs}ms` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        </div>
+      )}
+
+      <p className="px-1 text-xs leading-relaxed text-ink-muted">
+        Public information can be inaccurate, incomplete or out of date. Check First presents evidence from public sources so you can decide — it does not
+        determine whether anyone is safe, honest or trustworthy, and it is not a criminal-history check.
+      </p>
+    </div>
+  );
+}
+
+const STATUS_LABEL: Record<ProviderStatus, string> = {
+  queued: "Queued",
+  searching: "Searching",
+  complete: "Results found",
+  no_results: "No results",
+  unavailable: "Unavailable",
+  not_configured: "Not configured",
+  error: "Error",
+  rate_limited: "Rate limited",
+};
+
+function SummaryCard({ label, value, note }: { label: string; value: number; note: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-soft">
+      <div className="eyebrow text-ink-faint">{label}</div>
+      <div className="mt-1.5 text-2xl font-extrabold tracking-tightest text-ink">{value}</div>
+      <div className="mt-0.5 text-[11px] text-ink-muted">{note}</div>
+    </div>
+  );
+}
+
+function Signal({ tone, title, body }: { tone: "good" | "warn" | "info"; title: string; body: string }) {
+  const icon = tone === "good" ? "check" : tone === "warn" ? "alert" : "info";
+  const cls = tone === "good" ? "bg-accent-50 text-accent-600" : tone === "warn" ? "bg-amber-50 text-amber-600" : "bg-brand-50 text-brand-600";
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/40 p-3">
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${cls}`}>
+        <Icon name={icon} size={16} />
+      </span>
+      <div>
+        <strong className="block text-[13px] text-ink">{title}</strong>
+        <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function CandidateRow({ c, rank }: { c: Candidate; rank: number }) {
+  const tone = c.confidence >= 70 ? "bg-accent-500" : c.confidence >= 40 ? "bg-amber-500" : "bg-slate-400";
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            Possible match {rank}
+            {c.demo && <span className="ml-2 rounded bg-fuchsia-100 px-1.5 py-0.5 text-[9px] text-fuchsia-700">Demo</span>}
+          </p>
+          <h4 className="mt-0.5 text-base font-bold text-ink">{c.displayName}</h4>
+          {c.subtitle && <p className="text-sm text-ink-muted">{c.subtitle}</p>}
+        </div>
+        <div className="text-right">
+          <div className="text-xl font-extrabold text-ink">{c.confidence}%</div>
+          <div className="text-[10px] font-medium text-slate-400">confidence</div>
+        </div>
+      </div>
+      <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full ${tone} transition-all duration-700`} style={{ width: `${c.confidence}%` }} />
       </div>
       <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
         {c.evidence.map((e, i) => (
-          <li key={i} className="flex items-center gap-2 text-sm">
-            {e.polarity === "match" && <Icon name="check" size={14} className="shrink-0 text-trust-600" />}
-            {e.polarity === "conflict" && <Icon name="x" size={14} className="shrink-0 text-rose-500" />}
+          <li key={i} className="flex items-center gap-2 text-[13px]">
+            {e.polarity === "match" && <Icon name="check" size={13} className="shrink-0 text-accent-600" />}
+            {e.polarity === "conflict" && <Icon name="x" size={13} className="shrink-0 text-rose-500" />}
             {e.polarity === "unknown" && <span className="shrink-0 text-slate-300">?</span>}
             <span className={e.polarity === "conflict" ? "text-rose-700" : e.polarity === "unknown" ? "text-slate-400" : "text-ink-soft"}>{e.label}</span>
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-function ResultItemRow({ item, providerClass }: { item: ProviderResult["results"][number]; providerClass: "authoritative" | "discovery" }) {
-  return (
-    <div className="border-t border-slate-100 py-3 first:border-t-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-ink">{item.title}</span>
-        <SourceBadge cls={item.sourceClass ?? providerClass} />
-        {item.demo && <DemoBadge />}
-      </div>
-      {item.detail && <p className="mt-1 text-sm text-ink-muted">{item.detail}</p>}
-      {item.fields && (
-        <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
-          {Object.entries(item.fields).map(([k, v]) => (
-            <div key={k} className="flex gap-2 text-sm">
-              <dt className="min-w-[92px] shrink-0 font-medium text-slate-500">{k}</dt>
-              <dd className="break-words text-ink-soft">{v}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {item.sourceUrl && (
-        <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700">
-          Open source <Icon name="external" size={13} />
-        </a>
-      )}
-    </div>
-  );
-}
-
-export function Results({ report, candidates, partial }: { report: SearchReport; candidates: Candidate[]; partial?: boolean }) {
-  const s = report.summary;
-  // Real-query providers that returned results (exclude link-generators & demo-off).
-  const realWithResults = report.providers.filter((p) => p.status === "complete" && p.dataOrigin !== "link");
-  const linkProviders = report.providers.filter((p) => p.dataOrigin === "link" && p.status === "complete");
-
-  const grouped = new Map<string, ProviderResult[]>();
-  for (const p of realWithResults) {
-    if (!grouped.has(p.category)) grouped.set(p.category, []);
-    grouped.get(p.category)!.push(p);
-  }
-  const orderedCats = CATEGORY_ORDER.filter((c) => grouped.has(c));
-  const top = candidates[0];
-
-  const doubleChecks: string[] = [];
-  if (top) for (const e of top.evidence) if (e.polarity === "conflict") doubleChecks.push(`Conflicting ${e.label.toLowerCase()} between records.`);
-  for (const p of report.providers) {
-    if (p.status === "not_configured") doubleChecks.push(`${p.providerLabel} was not checked (${p.warnings[0] ?? "not configured"}).`);
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Summary + honest final status */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xl font-bold text-ink">{partial ? "Searching…" : top ? "Possible match identified" : "Search complete"}</h3>
-            <p className="mt-1 text-sm text-ink-muted">
-              {s.sourcesSearched} source{s.sourcesSearched === 1 ? "" : "s"} searched · {s.returnedResults} returned results · {s.noResults} no results
-              {s.unavailable ? ` · ${s.unavailable} unavailable` : ""}
-              {s.needsConfig ? ` · ${s.needsConfig} need configuration` : ""}
-              {s.links ? ` · ${s.links} official links` : ""}
-            </p>
-          </div>
-          {top && (
-            <div className="text-right">
-              <div className="text-3xl font-bold text-ink">{top.confidence}%</div>
-              <div className="text-xs font-medium text-slate-400">identity confidence</div>
-            </div>
-          )}
-        </div>
-        {s.demo && (
-          <p className="mt-3 flex items-center gap-2 rounded-lg bg-fuchsia-50 px-3 py-2 text-sm text-fuchsia-800">
-            <Icon name="info" size={15} /> Demo mode is on — some results are <strong>demo data</strong>, not real searches.
-          </p>
-        )}
-        {!partial && s.sourcesSearched === 0 && (
-          <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            <Icon name="alert" size={15} /> No source performed a live query for this search type. Configure ABN Lookup and a web-search key to search
-            business/person/phone data — or use the official links below.
-          </p>
-        )}
-      </div>
-
-      {candidates.length > 0 && (
-        <section aria-label="Possible matches" className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Possible matches</h3>
-          {candidates.map((c, i) => (
-            <CandidateCard key={c.id} c={c} rank={i + 1} />
-          ))}
-          <p className="text-xs text-ink-muted">
-            Confidence means how likely these records describe the same entity — <strong>not</strong> whether they can be trusted.
-          </p>
-        </section>
-      )}
-
-      {orderedCats.map((cat) => (
-        <section key={cat} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="mb-1 text-base font-semibold text-ink">{CATEGORY_TITLES[cat] ?? cat}</h3>
-          {grouped.get(cat)!.map((p) => (
-            <div key={p.provider} className="mt-2">
-              {p.results.map((item, i) => (
-                <ResultItemRow key={i} item={item} providerClass={p.sourceClass} />
-              ))}
-            </div>
-          ))}
-        </section>
-      ))}
-
-      {/* Official sources to check — link-generators, clearly NOT searches */}
-      {linkProviders.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-ink">Official sources to check</h3>
-          <p className="mb-2 text-xs text-ink-muted">Check First did not search these — they are one-click links to official registers and public searches you can open yourself.</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {linkProviders.flatMap((p) =>
-              p.results.map((item, i) => (
-                <a
-                  key={`${p.provider}-${i}`}
-                  href={item.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink-soft transition-colors hover:border-brand-300 hover:bg-brand-50/40"
-                >
-                  <span className="truncate">{item.title}</span>
-                  <Icon name="external" size={13} className="shrink-0 text-brand-500" />
-                </a>
-              )),
-            )}
-          </div>
-        </section>
-      )}
-
-      {doubleChecks.length > 0 && (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
-          <h3 className="mb-2 flex items-center gap-2 text-base font-semibold text-amber-800">
-            <Icon name="alert" size={16} /> Things to double-check
-          </h3>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-amber-900">
-            {[...new Set(doubleChecks)].map((d, i) => (
-              <li key={i}>{d}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Sources & transparency */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold text-ink">Sources checked</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
-                <th className="pb-2 font-semibold">Source</th>
-                <th className="pb-2 font-semibold">Origin</th>
-                <th className="pb-2 font-semibold">Status</th>
-                <th className="pb-2 font-semibold">Took</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.providers.map((p) => {
-                const cl = classOf(p);
-                return (
-                  <tr key={p.provider} className="border-t border-slate-100">
-                    <td className="py-2 pr-3 font-medium text-ink-soft">
-                      {p.sourceUrl ? (
-                        <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="text-brand-600 hover:underline">
-                          {p.providerLabel}
-                        </a>
-                      ) : (
-                        p.providerLabel
-                      )}
-                      {p.demo && <DemoBadge />}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cl.cls}`}>{cl.label}</span>
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_META[p.status].cls}`}>{STATUS_META[p.status].label}</span>
-                    </td>
-                    <td className="py-2 text-xs text-slate-400">{typeof p.durationMs === "number" ? `${p.durationMs}ms` : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <p className="px-1 text-xs leading-relaxed text-ink-muted">
-        Public information can be inaccurate, incomplete or out of date. Check First presents evidence from public sources so you can decide — it does not
-        determine whether anyone is safe, honest, or trustworthy, and it is not a criminal-history check.
-      </p>
     </div>
   );
 }

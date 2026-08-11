@@ -100,6 +100,8 @@ const config: Config = {
           "50%": { opacity: "1", transform: "scale(1.15)" },
         },
         shimmer: { "100%": { transform: "translateX(100%)" } },
+        sweep: { to: { transform: "rotate(360deg)" } },
+        blip: { "50%": { transform: "scale(1.35)", opacity: "0.6" } },
       },
       animation: {
         "fade-up": "fade-up 0.5s cubic-bezier(0.22,1,0.36,1) both",
@@ -107,6 +109,8 @@ const config: Config = {
         "scale-in": "scale-in 0.4s cubic-bezier(0.22,1,0.36,1) both",
         "expand-down": "expand-down 0.28s cubic-bezier(0.22,1,0.36,1)",
         float: "float 6s ease-in-out infinite",
+        sweep: "sweep 2.2s linear infinite",
+        blip: "blip 1.6s ease-in-out infinite",
       },
     },
   },

@@ -5,6 +5,34 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-08-11
+
+Search loading + results experience rebuilt to match the "mockup v3" interactive design — a radar
+loading view and a tabbed identity report — but driven entirely by our **real report data** with
+the honest LIVE / LINK / NEEDS-CONFIG / DEMO classification preserved (the mockup's fictional demo
+records never enter production). Verified: lint, typecheck, 58 unit+integration, prod build, 22
+Playwright E2E (desktop + mobile), screenshots.
+
+### Added
+- `SearchLoading` — a radar loading view (sweeping scanner, subject initials, stage label, progress
+  bar) with animated source-status rows mapped to the **real streaming providers**, each showing its
+  origin badge and Queued → Searching → Complete state.
+- Rebuilt `Results` in the mockup's premium style: a navy identity hero (avatar, name, corroborating
+  signals, honest badges), a **confidence score ring** (top candidate, or "—/No confident match"),
+  a four-card summary strip (real counts), and pill **result tabs** — Overview / Contact & digital /
+  Business links / Licences / Digital footprint / Source trail — that only appear when a section has
+  real findings. Overview shows possible matches, key findings (derived from real provider outcomes),
+  "what was checked", and things to double-check.
+
+### Changed
+- `/search` now flows loading → results (radar while searching, then the tabbed report). The subject
+  is shown once as a breadcrumb + hero (removed the redundant page-level heading).
+- Confidence, evidence, badges, findings and counts are computed only from real (or clearly-labelled
+  demo) provider results — no fabricated fields from the mockup were carried over.
+
+### Removed
+- The previous `LiveProgress` component (superseded by `SearchLoading`).
+
 ## [0.4.0] — 2026-08-11
 
 Premium visual overhaul of the front end. Pure presentation layer — no product logic, routes,

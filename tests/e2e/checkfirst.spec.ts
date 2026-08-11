@@ -84,13 +84,15 @@ test.describe("Hero → dedicated /search journey (§21)", () => {
 
     // Navigation occurred; homepage does NOT contain the results.
     await expect(page).toHaveURL(/\/search$/);
-    await expect(page.getByRole("heading", { name: "John Smith", level: 1 })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/^Checking$/)).toBeVisible({ timeout: 10_000 });
 
-    // Auto-started: progress or report (no second submit).
-    await expect(page.getByRole("heading", { name: "Sources checked" })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/identity confidence/i).first()).toBeVisible({ timeout: 10_000 });
+    // Auto-started: radar loading then the tabbed report (no second submit).
+    await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("heading", { name: "John Smith", exact: true, level: 2 })).toBeVisible();
+    await expect(page.getByText(/Match confidence/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Demo data").first()).toBeVisible({ timeout: 10_000 });
+    // Source trail tab reveals the full sources table.
+    await page.getByRole("tab", { name: "Source trail" }).click();
+    await expect(page.getByRole("heading", { name: "Source trail" })).toBeVisible();
     // Edit / New controls exist.
     await expect(page.getByRole("button", { name: /edit search/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /new search/i })).toBeVisible();
@@ -102,8 +104,8 @@ test.describe("Hero → dedicated /search journey (§21)", () => {
     await page.getByLabel(/Website or domain/i).fill("example.com");
     await page.getByRole("button", { name: /^check first$/i }).click();
     await expect(page).toHaveURL(/\/search$/);
-    await expect(page.getByRole("heading", { name: "example.com", level: 1 })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "Sources checked" })).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "example.com", exact: true, level: 2 })).toBeVisible();
   });
 
   test("New search stays on /search with a blank advanced form (does NOT go home)", async ({ page }) => {
@@ -112,7 +114,7 @@ test.describe("Hero → dedicated /search journey (§21)", () => {
     await page.getByLabel("Last name").fill("Doe");
     await page.getByRole("button", { name: /^check first$/i }).click();
     await expect(page).toHaveURL(/\/search$/);
-    await page.getByRole("heading", { name: "Sources checked" }).waitFor({ timeout: 20_000 });
+    await page.getByRole("tab", { name: "Overview" }).waitFor({ timeout: 20_000 });
 
     await page.getByRole("button", { name: /new search/i }).click();
     // Stays on /search, shows the blank advanced New search form.
@@ -122,7 +124,7 @@ test.describe("Hero → dedicated /search journey (§21)", () => {
     await expect(first).toBeVisible();
     await expect(first).toHaveValue("");
     // Previous results are cleared.
-    await expect(page.getByRole("heading", { name: "Sources checked" })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveCount(0);
   });
 
   test("Edit search keeps results visible and re-runs on update", async ({ page }) => {
@@ -131,12 +133,12 @@ test.describe("Hero → dedicated /search journey (§21)", () => {
     await page.getByLabel("Last name").fill("Jones");
     await page.getByRole("button", { name: /^check first$/i }).click();
     await expect(page).toHaveURL(/\/search$/);
-    await page.getByRole("heading", { name: "Sources checked" }).waitFor({ timeout: 20_000 });
+    await page.getByRole("tab", { name: "Overview" }).waitFor({ timeout: 20_000 });
     await page.getByRole("button", { name: /edit search/i }).click();
-    // Advanced edit form appears, prefilled; results remain beneath.
+    // Advanced edit form appears, prefilled.
     await expect(page.getByRole("heading", { name: "Edit search" })).toBeVisible();
     await expect(page.getByLabel("First name")).toHaveValue("Sam");
     await page.getByRole("button", { name: /update search/i }).click();
-    await expect(page.getByRole("heading", { name: "Sources checked" })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible({ timeout: 20_000 });
   });
 });

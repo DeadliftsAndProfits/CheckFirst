@@ -138,6 +138,20 @@ the tokens for consistency. Verified: lint ✔ · typecheck ✔ · 58 unit+integ
 **22 Playwright E2E ✔** (all tabs, optional details, FAQ, nav, New/Edit search preserved) ·
 screenshots at desktop / tablet / mobile ✔. No functionality was changed or removed.
 
+## Round 5 — Mockup-style loading & results (2026-08-11)
+
+Adopted the interactive loading and results experience from the owner's "mockup v3", **driven by
+real report data** — the mockup's fictional records were not carried into production. New
+`SearchLoading` (radar scanner + progress + animated source rows wired to the real streaming
+providers with LIVE/LINK/NEEDS-CONFIG/DEMO badges) and a rebuilt `Results` (navy identity hero +
+confidence score ring + 4-card summary strip + pill result tabs: Overview / Contact & digital /
+Business links / Licences / Digital footprint / Source trail). Tabs appear only when a section has
+real findings; the score ring shows "—/No confident match" honestly when no candidate is assembled.
+`/search` flows loading → results; `LiveProgress` was removed. Confidence, badges, findings and
+counts derive only from real (or clearly-labelled demo) provider output. Verified: lint ✔ ·
+typecheck ✔ · 58 unit+integration ✔ · prod build ✔ · **22 Playwright E2E ✔** (desktop + mobile) ·
+screenshots of loading + person/website/mobile results ✔.
+
 ### What was NOT delivered as mandated
 - **GSD orchestration.** The brief mandates the installed GSD skill. **GSD is not installed on
   this machine** (no skill/plugin/command; absent from the tool list). Rather than fabricate GSD
