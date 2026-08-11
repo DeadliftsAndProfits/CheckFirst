@@ -5,6 +5,16 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-08-11
+
+### Changed
+- The search loading animation now always plays through to completion before results appear.
+  Source rows reveal in sequence and the progress bar fills to 100%, then the report is shown —
+  so fast searches (which the backend finishes in milliseconds) no longer flash straight past the
+  radar view. A row is still never shown complete before its real provider has actually settled,
+  and slow real-network searches (e.g. website checks) continue to pace naturally. Respects
+  reduced-motion. `/search` reveals results only once the animation signals it has finished.
+
 ## [0.5.0] — 2026-08-11
 
 Search loading + results experience rebuilt to match the "mockup v3" interactive design — a radar

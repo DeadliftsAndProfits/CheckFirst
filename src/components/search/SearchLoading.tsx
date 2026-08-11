@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { LiveState } from "./useSearch";
+import type { Phase } from "./useSearch";
 import type { ProviderStatus, DataOrigin } from "@/types/core";
 import { Icon } from "@/components/Icon";
 
@@ -27,26 +29,58 @@ function originBadge(origin: DataOrigin, status: ProviderStatus) {
 }
 
 function statusText(status: ProviderStatus, origin: DataOrigin, n: number): string {
-  if (status === "searching" || status === "queued") return "Searching";
   if (status === "complete") return origin === "link" ? `${n} link${n === 1 ? "" : "s"}` : "Complete";
   if (status === "no_results") return "No results";
   if (status === "not_configured") return "Not configured";
   if (status === "unavailable") return "Unavailable";
   if (status === "rate_limited") return "Rate limited";
-  return "Error";
+  if (status === "error") return "Error";
+  return "Searching";
 }
 
-export function SearchLoading({ state, subject }: { state: LiveState; subject: string }) {
-  const list = state.order.map((id) => state.providers.get(id)!).filter(Boolean);
-  const total = list.length || 1;
-  const done = list.filter((p) => DONE.includes(p.status)).length;
-  const pct = Math.round((done / total) * 100);
-  const real = list.filter((p) => REAL.includes(p.dataOrigin));
-  const references = real.filter((p) => p.status === "complete").reduce((a, p) => a + p.results.length, 0);
-  const searched = real.filter((p) => DONE.includes(p.status) && p.status !== "not_configured").length;
+const prefersReducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-  const active = list.find((p) => p.status === "searching" || p.status === "queued");
-  const label = done >= total ? "Assembling your trust report" : active ? active.providerLabel : "Starting search";
+/**
+ * Radar loading view. The source rows reveal in sequence and the progress bar
+ * fills to 100% so the animation always plays through — but a row is never shown
+ * complete before its real provider has actually settled, and slow (real
+ * network) searches naturally pace the reveal. Calls onDone once the animation
+ * has reached 100% AND the real search has finished.
+ */
+export function SearchLoading({ state, subject, phase, onDone }: { state: LiveState; subject: string; phase: Phase; onDone?: () => void }) {
+  const list = state.order.map((id) => state.providers.get(id)!).filter(Boolean);
+  const total = list.length;
+  const realSettled = list.filter((p) => DONE.includes(p.status)).length;
+
+  // Paced reveal: advance one row at a time, capped by what's really settled.
+  const [reveal, setReveal] = useState(0);
+  const stepMs = prefersReducedMotion() ? 60 : 320;
+  useEffect(() => {
+    const target = Math.min(total, realSettled);
+    if (reveal >= target) return;
+    const t = setTimeout(() => setReveal((r) => Math.min(target, r + 1)), stepMs);
+    return () => clearTimeout(t);
+  }, [reveal, realSettled, total, stepMs]);
+
+  // Signal completion once fully revealed and the real search is done.
+  const doneRef = useRef(false);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  useEffect(() => {
+    if (doneRef.current) return;
+    if ((phase === "done" || phase === "error") && total > 0 && reveal >= total) {
+      doneRef.current = true;
+      const t = setTimeout(() => onDoneRef.current?.(), prefersReducedMotion() ? 120 : 520);
+      return () => clearTimeout(t);
+    }
+  }, [phase, reveal, total]);
+
+  const revealed = list.slice(0, reveal);
+  const references = revealed.filter((p) => REAL.includes(p.dataOrigin) && p.status === "complete").reduce((a, p) => a + p.results.length, 0);
+  const searched = revealed.filter((p) => REAL.includes(p.dataOrigin) && p.status !== "not_configured").length;
+  const pct = total ? Math.round((reveal / total) * 100) : 0;
+
+  const activeLabel = reveal >= total ? "Assembling your trust report" : list[reveal]?.providerLabel ?? "Starting search";
 
   return (
     <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,360px)_1fr] lg:gap-12">
@@ -82,36 +116,37 @@ export function SearchLoading({ state, subject }: { state: LiveState; subject: s
 
         <div className="mt-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft">
           <div className="mb-2.5 flex items-center justify-between gap-4">
-            <strong className="text-sm font-bold text-ink">{label}</strong>
+            <strong className="text-sm font-bold text-ink">{activeLabel}</strong>
             <span className="text-sm font-extrabold text-accent-600">{pct}%</span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-gradient-to-r from-accent-500 to-accent-400 transition-[width] duration-500" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-accent-500 to-accent-400 transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
           </div>
           <p className="mt-2 text-xs text-ink-muted">
             {searched} source{searched === 1 ? "" : "s"} searched · {references} reference{references === 1 ? "" : "s"} found
           </p>
 
           <ul className="mt-4 grid gap-2" aria-live="polite">
-            {list.map((p) => {
-              const activeRow = p.status === "searching" || p.status === "queued";
-              const doneRow = DONE.includes(p.status) && p.status === "complete" && p.dataOrigin !== "link";
+            {list.map((p, i) => {
+              const isRevealed = i < reveal;
+              const isActive = i === reveal && reveal < total;
+              const doneRow = isRevealed && p.status === "complete" && p.dataOrigin !== "link";
               return (
                 <li
                   key={p.provider}
                   className={`grid grid-cols-[32px_1fr_auto] items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
-                    activeRow ? "bg-accent-50 text-ink" : "bg-slate-50 text-ink-muted"
+                    isActive ? "bg-accent-50 text-ink" : "bg-slate-50 text-ink-muted"
                   }`}
                 >
                   <span className={`flex h-8 w-8 items-center justify-center rounded-lg border text-[11px] font-black ${doneRow ? "border-accent-500 bg-accent-500 text-white" : "border-slate-200 bg-white text-navy-800"}`}>
-                    <Icon name={activeRow ? "search" : doneRow ? "check" : "clock"} size={15} />
+                    <Icon name={isActive ? "search" : doneRow ? "check" : "clock"} size={15} />
                   </span>
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate font-semibold text-ink-soft">{p.providerLabel}</span>
-                    {originBadge(p.dataOrigin, p.status)}
+                    {isRevealed && originBadge(p.dataOrigin, p.status)}
                   </span>
-                  <span className={`text-[11px] font-bold ${activeRow ? "text-accent-600" : p.status === "complete" && p.dataOrigin !== "link" ? "text-accent-600" : "text-slate-400"}`}>
-                    {statusText(p.status, p.dataOrigin, p.results.length)}
+                  <span className={`text-[11px] font-bold ${isActive ? "text-accent-600" : doneRow ? "text-accent-600" : "text-slate-400"}`}>
+                    {isRevealed ? statusText(p.status, p.dataOrigin, p.results.length) : isActive ? "Searching" : "Queued"}
                   </span>
                 </li>
               );

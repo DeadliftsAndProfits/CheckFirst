@@ -46,6 +46,8 @@ export default function SearchPage() {
   const { state, search, reset } = useSearch();
   const [input, setInput] = useState<SearchInput | null>(null);
   const [panel, setPanel] = useState<null | "edit" | "new">(null);
+  // The loading animation must play to completion before results are revealed.
+  const [loadingDone, setLoadingDone] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export default function SearchPage() {
     setPendingSearch(next);
     setInput(next);
     setPanel(null);
+    setLoadingDone(false);
     reset();
     search(next);
   };
@@ -71,12 +74,15 @@ export default function SearchPage() {
     clearPendingSearch();
     reset();
     setInput(null);
+    setLoadingDone(false);
     setPanel("new");
   };
 
   const summary = input ? summarise(input) : null;
-  const busy = state.phase === "searching";
   const report = state.report;
+  // Show the loading view while searching AND until its animation has completed.
+  const showLoading = state.phase === "searching" || (state.phase === "done" && !loadingDone);
+  const showResults = state.phase === "done" && loadingDone && !!report;
 
   return (
     <div className="min-h-screen">
@@ -140,13 +146,13 @@ export default function SearchPage() {
               </div>
             )}
 
-            {busy && (
+            {state.phase !== "error" && showLoading && (
               <div className="rounded-4xl border border-slate-200/80 bg-white p-6 shadow-card sm:p-8">
-                <SearchLoading state={state} subject={summary.title} />
+                <SearchLoading state={state} subject={summary.title} phase={state.phase} onDone={() => setLoadingDone(true)} />
               </div>
             )}
 
-            {report && state.phase === "done" && <Results report={report} candidates={state.candidates} subject={summary.title} />}
+            {showResults && <Results report={report!} candidates={state.candidates} subject={summary.title} />}
           </>
         )}
       </main>
