@@ -13,6 +13,7 @@ import { providers as realProviders } from "@/lib/providers/registry";
 import { demoProviders } from "@/lib/providers/demo";
 import { type Provider, type ProviderContext, runProviderSafely } from "@/lib/providers/base";
 import { resolveCandidates } from "@/lib/resolve";
+import { buildIdentity } from "@/lib/identity";
 import { computeSummary } from "@/lib/reportSummary";
 import { config } from "@/lib/config";
 
@@ -108,10 +109,13 @@ export async function* runSearch(input: SearchInput, opts: OrchestratorOptions =
     clearTimeout(overallTimer);
   }
 
-  const candidates: Candidate[] = resolveCandidates(signals, collected);
+  let candidates: Candidate[] = resolveCandidates(signals, collected);
+  // Synthesise a best-fit identity for person/business searches and lead with it.
+  const identity = buildIdentity(input, normalised, collected);
+  if (identity) candidates = [identity.candidate, ...candidates];
   yield { kind: "candidates", candidates };
 
-  const report = buildReport(input, normalised, queries, collected, candidates, startedAt);
+  const report = buildReport(input, normalised, queries, collected, candidates, startedAt, identity?.summary);
   yield { kind: "report", report };
 }
 
@@ -122,6 +126,7 @@ function buildReport(
   providers: ProviderResult[],
   candidates: Candidate[],
   startedAt: string,
+  identity?: SearchReport["identity"],
 ): SearchReport {
   const summary = computeSummary(providers);
   const notices: string[] = [];
@@ -137,6 +142,7 @@ function buildReport(
     queries,
     providers,
     candidates,
+    identity,
     summary,
     notices,
     startedAt,

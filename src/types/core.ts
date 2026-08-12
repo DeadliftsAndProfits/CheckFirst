@@ -93,6 +93,8 @@ export interface ResultItem {
   signals?: EntitySignal[];
   /** Marked true when produced by demo fixtures. */
   demo?: boolean;
+  /** For web results: true if this result plausibly describes the searched subject. */
+  matchesSubject?: boolean;
 }
 
 /**
@@ -165,6 +167,27 @@ export interface Candidate {
   demo?: boolean;
 }
 
+/** One row in the synthesised identity summary (echoed input + enrichment). */
+export interface IdentityField {
+  label: string;
+  value: string;
+  /** e.g. "corroborated · 3 sources", "as provided", "from LinkedIn". */
+  note?: string;
+  verified?: boolean;
+}
+
+/** A best-fit identity assembled from the search input + corroborating public data. */
+export interface IdentitySummary {
+  headline: string;
+  subtitle?: string;
+  fields: IdentityField[];
+  bestProfile?: { title: string; url: string; snippet?: string; platform: string };
+  /** Web results that plausibly describe the searched subject. */
+  matchedRefs: number;
+  /** Web results that share the name but describe a different subject. */
+  otherNameRefs: number;
+}
+
 /** The final report streamed/returned to the client. */
 export interface SearchReport {
   input: SearchInput;
@@ -172,6 +195,8 @@ export interface SearchReport {
   queries: string[];
   providers: ProviderResult[];
   candidates: Candidate[];
+  /** Best-fit identity synthesised from input + corroborating public data (R7). */
+  identity?: IdentitySummary;
   /** Aggregate counts for the header/summary — honest (R3). */
   summary: {
     /** Providers that actually executed a real query (live/local/cached). */

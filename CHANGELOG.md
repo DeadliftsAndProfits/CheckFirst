@@ -5,6 +5,28 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-11
+
+### Added
+- **Identity synthesis** — person and business searches now assemble a single best-fit identity
+  from the details you provided, corroborated by the discovered public data, instead of dumping
+  links:
+  - A new **Identity summary** panel echoes your search parameters (name, employer, location,
+    phone…) and enriches them — e.g. a role/occupation extracted from the matched LinkedIn — each
+    tagged "corroborated · N sources", "from LinkedIn", or "as provided".
+  - The synthesised identity is the **top candidate**, with a real confidence score and evidence
+    (e.g. "LinkedIn profile corroborates the name + employer").
+  - The **best-matching public profile** is picked out and highlighted (AU-domain + name + employer
+    aware), and a "… profile found" badge appears on the hero.
+- Web results are now split into **"likely this subject"** (name + employer/location corroborated)
+  vs a collapsed **"other people with this name"**, so same-name strangers no longer dominate.
+- In-memory web-search **query cache** (15 min) so re-running or editing a search doesn't spend
+  Brave/Google credits again.
+
+### Fixed
+- Hid the "We cannot provide a description for this page" placeholder some engines return for
+  profile pages (e.g. LinkedIn).
+
 ## [0.5.4] — 2026-08-11
 
 ### Fixed

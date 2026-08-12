@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Candidate, ProviderResult, ProviderStatus, DataOrigin, SearchReport } from "@/types/core";
+import type { Candidate, ProviderResult, ProviderStatus, DataOrigin, SearchReport, IdentitySummary } from "@/types/core";
 import { Icon } from "@/components/Icon";
 
 /* ---------------------------------- bits ---------------------------------- */
@@ -135,11 +135,9 @@ function RefRow({ item }: { item: ProviderResult["results"][number] }) {
   );
 }
 
-/** Grouped, real web-search results (Social / Directories / Web references). */
-function WebReferences({ p }: { p: ProviderResult }) {
-  const groups = { social: [] as typeof p.results, directory: [] as typeof p.results, web: [] as typeof p.results };
-  for (const it of p.results) groups[classifyRef(it.sourceUrl).group].push(it);
-
+function GroupedRefs({ items }: { items: ProviderResult["results"] }) {
+  const groups = { social: [] as typeof items, directory: [] as typeof items, web: [] as typeof items };
+  for (const it of items) groups[classifyRef(it.sourceUrl).group].push(it);
   const sections: { key: keyof typeof groups; title: string }[] = [
     { key: "social", title: "Public profiles" },
     { key: "directory", title: "Directories & listings" },
@@ -161,8 +159,44 @@ function WebReferences({ p }: { p: ProviderResult }) {
             </div>
           </div>
         ))}
+    </div>
+  );
+}
+
+/**
+ * Real web results, split into "likely this subject" (name + employer/location
+ * corroborated) and "other people with this name" (demoted/collapsed), so the
+ * matched identity leads and same-name strangers don't dominate.
+ */
+function WebReferences({ p, subject }: { p: ProviderResult; subject?: string }) {
+  const classified = p.results.some((r) => r.matchesSubject !== undefined);
+  const matched = classified ? p.results.filter((r) => r.matchesSubject) : p.results;
+  const others = classified ? p.results.filter((r) => !r.matchesSubject) : [];
+
+  return (
+    <div className="space-y-4">
+      {matched.length > 0 ? (
+        <div>
+          {classified && <p className="mb-2 text-sm font-bold text-ink">Likely {subject ?? "this subject"} · {matched.length}</p>}
+          <GroupedRefs items={matched} />
+        </div>
+      ) : (
+        <p className="text-sm text-ink-muted">No result clearly matched the details you gave. The closest same-name results are below.</p>
+      )}
+
+      {others.length > 0 && (
+        <details className="group rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5">
+          <summary className="flex cursor-pointer items-center justify-between text-sm font-semibold text-ink-soft">
+            Other people with this name · {others.length}
+            <Icon name="chevron" size={16} className="text-slate-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <p className="mb-3 mt-2 text-xs text-ink-muted">These share the name but don&rsquo;t match the employer/location you provided — probably not the same person.</p>
+          <GroupedRefs items={others} />
+        </details>
+      )}
+
       <p className="text-[11px] text-ink-muted">
-        Found via {p.sourceAuthority ?? "web search"}. These are public search results — a matching name doesn&rsquo;t confirm it&rsquo;s the same person.
+        Found via {p.sourceAuthority ?? "web search"}. Public search results — a matching name doesn&rsquo;t confirm it&rsquo;s the same person.
       </p>
     </div>
   );
@@ -181,6 +215,39 @@ function ScoreRing({ value }: { value: number | null }) {
       <div className="absolute inset-[8px] rounded-full bg-navy-800" />
       <strong className="relative text-2xl font-extrabold tracking-tightest text-white">{value == null ? "—" : v}</strong>
     </div>
+  );
+}
+
+/* ---------------------------- identity summary ---------------------------- */
+
+function IdentityPanel({ id, confidence }: { id: IdentitySummary; confidence?: number }) {
+  const tone = confidence == null ? "neutral" : confidence >= 70 ? "good" : confidence >= 40 ? "warn" : "neutral";
+  const label = confidence == null ? "Assembled" : confidence >= 70 ? "Strong match" : confidence >= 40 ? "Possible match" : "Weak match";
+  return (
+    <Panel title="Identity summary" sub="Best-fit identity assembled from the details you gave and corroborating public sources." pill={<StatusPill tone={tone}>{label}</StatusPill>}>
+      {id.bestProfile && (
+        <a href={id.bestProfile.url} target="_blank" rel="noopener noreferrer nofollow" className="mb-4 flex items-start gap-3 rounded-2xl border border-accent-300 bg-accent-50/50 p-3.5 transition-colors hover:border-accent-400">
+          <span className="mt-0.5 rounded bg-accent-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{id.bestProfile.platform}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-ink">{id.bestProfile.title}</p>
+            {id.bestProfile.snippet && <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">{id.bestProfile.snippet}</p>}
+            <p className="mt-1 flex items-center gap-1 text-xs font-bold text-accent-600">Best profile match <Icon name="external" size={12} /></p>
+          </div>
+        </a>
+      )}
+      <dl>
+        {id.fields.map((f, i) => (
+          <div key={i} className="grid grid-cols-[112px_1fr_auto] items-center gap-3 border-t border-slate-100 py-2.5 first:border-t-0 first:pt-0 sm:grid-cols-[130px_1fr_auto]">
+            <dt className="text-xs text-ink-muted">{f.label}</dt>
+            <dd className="text-[13px] font-semibold text-ink">{f.value}</dd>
+            <dd className={`whitespace-nowrap text-[10px] font-bold uppercase tracking-wide ${f.verified ? "text-accent-600" : "text-slate-400"}`}>
+              {f.verified && <Icon name="check" size={11} className="mr-0.5 inline" />}
+              {f.note}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Panel>
   );
 }
 
@@ -234,6 +301,7 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
   // identity badges (honest — only what's backed by real/demo findings)
   const badges: string[] = [];
   if (top) badges.push(top.confidence >= 70 ? "Identity likely matched" : "Possible match");
+  if (report.identity?.bestProfile) badges.push(`${report.identity.bestProfile.platform} profile found`);
   if (realComplete.concat(report.providers.filter((p) => p.dataOrigin === "demo" && p.status === "complete")).some((p) => p.category === "business")) badges.push("Business record found");
   if (report.providers.some((p) => p.category === "licences" && p.status === "complete" && p.dataOrigin !== "link")) badges.push("Licence record");
   if (realComplete.some((p) => p.category === "website")) badges.push("Website checked");
@@ -255,6 +323,7 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
   for (const p of report.providers) if (p.status === "not_configured") doubleChecks.push(`${p.providerLabel} was not checked (${p.warnings[0] ?? "needs configuration"}).`);
 
   const webProvider = report.providers.find((p) => p.category === "web" && p.status === "complete" && p.results.length > 0);
+  const webTop = webProvider ? (webProvider.results.some((r) => r.matchesSubject) ? webProvider.results.filter((r) => r.matchesSubject) : webProvider.results) : [];
 
   return (
     <div className="space-y-5">
@@ -336,6 +405,8 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
       {activeTab === "overview" && (
         <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-5">
+            {report.identity && <IdentityPanel id={report.identity} confidence={top?.confidence} />}
+
             <Panel title="Possible matches" sub="Records that may describe the same entity, ranked by identity confidence." pill={<StatusPill tone={top ? "good" : "neutral"}>{candidates.length} found</StatusPill>}>
               {candidates.length ? (
                 <div className="space-y-3">
@@ -349,18 +420,16 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
               )}
             </Panel>
 
-            {webProvider && (
-              <Panel title="Top web references" sub="Best public matches found on the open web." pill={<StatusPill tone="good">{webProvider.results.length} found</StatusPill>}>
+            {webProvider && webTop.length > 0 && (
+              <Panel title="Top web references" sub="Best public matches for the details you gave." pill={<StatusPill tone="good">{webTop.length} match{webTop.length === 1 ? "" : "es"}</StatusPill>}>
                 <div className="grid gap-2">
-                  {webProvider.results.slice(0, 5).map((it, i) => (
+                  {webTop.slice(0, 5).map((it, i) => (
                     <RefRow key={i} item={it} />
                   ))}
                 </div>
-                {webProvider.results.length > 5 && (
-                  <button onClick={() => setActive("digital")} className="mt-3 text-sm font-bold text-brand-600 hover:underline">
-                    See all {webProvider.results.length} web references →
-                  </button>
-                )}
+                <button onClick={() => setActive("digital")} className="mt-3 text-sm font-bold text-brand-600 hover:underline">
+                  See all {webProvider.results.length} web references →
+                </button>
               </Panel>
             )}
 
@@ -412,7 +481,7 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
                 tabProviders[t.id].map((p) =>
                   p.category === "web" ? (
                     <Panel key={p.provider} title="Online presence & web references" sub={`${p.results.length} public result${p.results.length === 1 ? "" : "s"}, grouped by type.`} pill={<StatusPill tone="good">Live</StatusPill>}>
-                      <WebReferences p={p} />
+                      <WebReferences p={p} subject={subject} />
                     </Panel>
                   ) : (
                     <Panel key={p.provider} title={p.providerLabel} sub="Public-source findings for this search." pill={<OriginBadge p={p} />}>

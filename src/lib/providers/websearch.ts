@@ -15,9 +15,14 @@ interface Hit {
   snippet: string;
 }
 
+// Module-level cache: avoid re-hitting the paid/limited API for the same query
+// (e.g. when a user re-runs or edits a search). Lives for the server's lifetime.
+const CACHE_TTL_MS = 15 * 60 * 1000;
+const queryCache = new Map<string, { at: number; hits: Hit[] }>();
+
 /** Search engines return snippets with <strong> highlights and HTML entities. */
 function clean(s: string): string {
-  return (s ?? "")
+  const out = (s ?? "")
     .replace(/<[^>]*>/g, "")
     .replace(/&#x27;|&#39;/g, "'")
     .replace(/&quot;/g, '"')
@@ -27,6 +32,10 @@ function clean(s: string): string {
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  // Search engines return this placeholder for pages (e.g. LinkedIn) that block
+  // snippet text — it's noise, not a description.
+  if (/^we cannot provide a description for this page/i.test(out)) return "";
+  return out;
 }
 
 async function googleSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
@@ -86,12 +95,22 @@ export const webSearchProvider: Provider = {
     const results: ResultItem[] = [];
     const warnings: string[] = [];
 
+    let networkCalls = 0;
     for (let idx = 0; idx < runQueries.length; idx++) {
       const q = runQueries[idx];
-      // Brave's free tier allows ~1 request/second — space calls to avoid 429s.
-      if (engine === "brave" && idx > 0) await new Promise((r) => setTimeout(r, 1100));
+      const cacheKey = `${engine}|${q}`;
+      const cached = queryCache.get(cacheKey);
       try {
-        const hits = engine === "brave" ? await braveSearch(q, ctx.signal) : engine === "google" ? await googleSearch(q, ctx.signal) : await bingSearch(q, ctx.signal);
+        let hits: Hit[];
+        if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+          hits = cached.hits; // served from cache — no API call, no credit spent
+        } else {
+          // Brave's free tier allows ~1 request/second — space real calls to avoid 429s.
+          if (engine === "brave" && networkCalls > 0) await new Promise((r) => setTimeout(r, 1100));
+          networkCalls++;
+          hits = engine === "brave" ? await braveSearch(q, ctx.signal) : engine === "google" ? await googleSearch(q, ctx.signal) : await bingSearch(q, ctx.signal);
+          queryCache.set(cacheKey, { at: Date.now(), hits });
+        }
         for (const h of hits) {
           if (seen.has(h.link)) continue;
           seen.add(h.link);

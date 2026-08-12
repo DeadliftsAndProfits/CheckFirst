@@ -1,6 +1,6 @@
 {
   "name": "check-first",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "private": true,
   "description": "Check First — Australian-first consumer public-information verification platform. Know before you trust.",
   "scripts": {
