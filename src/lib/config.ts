@@ -34,6 +34,12 @@ export const config = {
       return Boolean(this.apiKey);
     },
   },
+  brave: {
+    apiKey: process.env.BRAVE_SEARCH_API_KEY ?? "",
+    get configured() {
+      return Boolean(this.apiKey);
+    },
+  },
   abr: {
     guid: process.env.ABR_GUID ?? "",
     get configured() {
@@ -55,7 +61,7 @@ export const config = {
   },
 };
 
-/** Whether any web-search provider is configured (Google or Bing). */
+/** Whether any web-search provider is configured (Brave, Google or Bing). */
 export function webSearchConfigured(): boolean {
-  return config.google.configured || config.bing.configured;
+  return config.brave.configured || config.google.configured || config.bing.configured;
 }

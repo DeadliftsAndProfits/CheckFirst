@@ -35,6 +35,18 @@ async function bingSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
   return (data.webPages?.value ?? []).map((i) => ({ title: i.name, link: i.url, snippet: i.snippet }));
 }
 
+async function braveSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
+  const url = `https://api.search.brave.com/res/v1/web/search?count=5&q=${encodeURIComponent(query)}`;
+  const res = await fetchWithTimeout(url, {
+    timeoutMs: 8000,
+    parentSignal: signal,
+    headers: { "X-Subscription-Token": config.brave.apiKey, Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`Brave HTTP ${res.status}`);
+  const data = (await res.json()) as { web?: { results?: { title: string; url: string; description?: string }[] } };
+  return (data.web?.results ?? []).map((i) => ({ title: i.title, link: i.url, snippet: i.description ?? "" }));
+}
+
 export const webSearchProvider: Provider = {
   id: "websearch",
   label: "Public web search",
@@ -46,12 +58,12 @@ export const webSearchProvider: Provider = {
   },
   async run(ctx: ProviderContext) {
     const query = ctx.queries[0] ?? "";
-    const engine = config.google.configured ? "google" : config.bing.configured ? "bing" : null;
+    const engine = config.brave.configured ? "brave" : config.google.configured ? "google" : config.bing.configured ? "bing" : null;
     if (!engine) {
       return notConfigured(
         webSearchProvider,
         query,
-        "Web search needs a Google Programmable Search key (GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX) or a Bing key (BING_SEARCH_API_KEY). Discovery links below still work.",
+        "Web search needs a Brave Search key (BRAVE_SEARCH_API_KEY) or a Google Programmable Search key (GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX). Discovery links below still work.",
       );
     }
 
@@ -62,7 +74,7 @@ export const webSearchProvider: Provider = {
 
     for (const q of runQueries) {
       try {
-        const hits = engine === "google" ? await googleSearch(q, ctx.signal) : await bingSearch(q, ctx.signal);
+        const hits = engine === "brave" ? await braveSearch(q, ctx.signal) : engine === "google" ? await googleSearch(q, ctx.signal) : await bingSearch(q, ctx.signal);
         for (const h of hits) {
           if (seen.has(h.link)) continue;
           seen.add(h.link);
@@ -83,7 +95,7 @@ export const webSearchProvider: Provider = {
       return buildResult({ provider: webSearchProvider, status: warnings.length ? "unavailable" : "no_results", query, warnings });
     }
     return ok(webSearchProvider, query, results.slice(0, 15), {
-      sourceAuthority: engine === "google" ? "Google Programmable Search" : "Bing Web Search",
+      sourceAuthority: engine === "brave" ? "Brave Search" : engine === "google" ? "Google Programmable Search" : "Bing Web Search",
       cacheSeconds: 1800,
       warnings,
     });

@@ -5,6 +5,18 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] — 2026-08-11
+
+### Added
+- **Brave Search** as a web-search provider (`BRAVE_SEARCH_API_KEY`). It's the recommended way to
+  make "Public web search" LIVE — real whole-web results, a free tier, one key, and none of the
+  Google Cloud project/enable/OAuth setup. The provider now prefers Brave, then Google CSE, then
+  Bing. Verified end-to-end: a business search returns real web references via Brave (origin=LIVE).
+
+### Notes
+- Google Programmable Search no longer offers whole-web for new engines (Jan 2026); it's limited to
+  ~50 domains. Bing's search API was retired in 2025. Brave is the simplest real-search path.
+
 ## [0.5.1] — 2026-08-11
 
 ### Changed
