@@ -5,6 +5,16 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] — 2026-08-11
+
+### Fixed
+- **Person searches now actually find the right person.** The query generator was over-quoting
+  (e.g. `"Name" "Employer"`), which made search engines return almost nothing, and only the first 3
+  (weakest) queries ran. It now leads with name + distinguishing context (employer/business/
+  occupation) — unquoted, quoted, and LinkedIn-targeted forms — so a person's LinkedIn/profile
+  surfaces reliably. The web-search provider runs more queries (4), returns more results (18), and
+  spaces Brave calls to respect its free-tier rate limit.
+
 ## [0.5.3] — 2026-08-11
 
 ### Changed

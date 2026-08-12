@@ -52,12 +52,21 @@ export function generateQueries(input: SearchInput, n: Record<string, string>): 
   switch (input.type) {
     case "person": {
       const name = n.fullName;
+      // The strongest signal for finding the RIGHT person is name + a
+      // distinguishing context (employer / business / occupation). Quoting BOTH
+      // phrases is too strict (search engines return almost nothing), so lead
+      // with the name + unquoted context — that's what actually surfaces the
+      // person's LinkedIn/profile — then add quoted and LinkedIn-targeted forms.
+      const context = n.employer || n.businessName || n.occupation;
       if (name) {
-        q.add(quote(name));
+        if (context) {
+          q.add(`${name} ${context}`);
+          q.add(`${quote(name)} ${context}`);
+          q.add(`${name} ${context} linkedin`);
+        }
         if (loc) q.add(`${quote(name)} ${loc}`);
-        if (n.employer) q.add(`${quote(name)} ${quote(n.employer)}`);
-        if (n.businessName) q.add(`${quote(name)} ${quote(n.businessName)}`);
-        if (n.occupation) q.add(`${quote(name)} ${n.occupation}`);
+        q.add(`${quote(name)} site:linkedin.com`);
+        q.add(quote(name));
       }
       for (const e of emailList) q.add(quote(e));
       for (const p of phoneList) for (const v of phoneVariants(p)) q.add(quote(v));

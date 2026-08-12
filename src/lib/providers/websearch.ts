@@ -50,7 +50,7 @@ async function bingSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
 }
 
 async function braveSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
-  const url = `https://api.search.brave.com/res/v1/web/search?count=5&q=${encodeURIComponent(query)}`;
+  const url = `https://api.search.brave.com/res/v1/web/search?count=8&q=${encodeURIComponent(query)}`;
   const res = await fetchWithTimeout(url, {
     timeoutMs: 8000,
     parentSignal: signal,
@@ -81,12 +81,15 @@ export const webSearchProvider: Provider = {
       );
     }
 
-    const runQueries = ctx.queries.slice(0, 3);
+    const runQueries = ctx.queries.slice(0, 4);
     const seen = new Set<string>();
     const results: ResultItem[] = [];
     const warnings: string[] = [];
 
-    for (const q of runQueries) {
+    for (let idx = 0; idx < runQueries.length; idx++) {
+      const q = runQueries[idx];
+      // Brave's free tier allows ~1 request/second — space calls to avoid 429s.
+      if (engine === "brave" && idx > 0) await new Promise((r) => setTimeout(r, 1100));
       try {
         const hits = engine === "brave" ? await braveSearch(q, ctx.signal) : engine === "google" ? await googleSearch(q, ctx.signal) : await bingSearch(q, ctx.signal);
         for (const h of hits) {
@@ -108,7 +111,7 @@ export const webSearchProvider: Provider = {
     if (!results.length) {
       return buildResult({ provider: webSearchProvider, status: warnings.length ? "unavailable" : "no_results", query, warnings });
     }
-    return ok(webSearchProvider, query, results.slice(0, 15), {
+    return ok(webSearchProvider, query, results.slice(0, 18), {
       sourceAuthority: engine === "brave" ? "Brave Search" : engine === "google" ? "Google Programmable Search" : "Bing Web Search",
       cacheSeconds: 1800,
       warnings,
