@@ -8,6 +8,7 @@
 import type { ResultItem } from "@/types/core";
 import { type Provider, type ProviderContext, ok, noResults } from "./base";
 import { generateDiscoveryLinks, googleSearchUrl } from "@/lib/query/generator";
+import { webSearchConfigured } from "@/lib/config";
 
 /** Social & general web discovery links. */
 export const searchLinksProvider: Provider = {
@@ -21,6 +22,9 @@ export const searchLinksProvider: Provider = {
     return Boolean(n.fullName || n.businessName || n.username || n.email || n.phone || n.domain || n.website);
   },
   async run(ctx) {
+    // When a real web-search engine is configured, it returns actual found
+    // profiles/results — so we don't also dump redundant "go and search" links.
+    if (webSearchConfigured()) return noResults(searchLinksProvider, "");
     const links = generateDiscoveryLinks(ctx.input, ctx.normalised);
     const social = links.filter((l) => l.group === "social" || l.group === "search" || l.group === "directory");
     if (!social.length) return noResults(searchLinksProvider, "");

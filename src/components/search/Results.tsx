@@ -46,19 +46,15 @@ function Panel({ title, sub, pill, children }: { title: string; sub?: string; pi
   );
 }
 
-/** Render a provider's result items as premium data-list rows. */
+/** Render a provider's result items as premium data-list rows (used inside a Panel). */
 function ProviderBlock({ p }: { p: ProviderResult }) {
   return (
-    <div className="border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="text-sm font-bold text-ink">{p.providerLabel}</span>
-        <OriginBadge p={p} />
-        {p.sourceUrl && (
-          <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700">
-            Open source <Icon name="external" size={12} />
-          </a>
-        )}
-      </div>
+    <div>
+      {p.sourceUrl && (
+        <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700">
+          Open source <Icon name="external" size={12} />
+        </a>
+      )}
       {p.results.map((item, i) => (
         <div key={i} className="mb-3 last:mb-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -86,6 +82,88 @@ function EmptyState({ text }: { text: string }) {
   return (
     <div className="rounded-3xl border border-dashed border-slate-200 bg-white/60 p-8 text-center">
       <p className="text-sm text-ink-muted">{text}</p>
+    </div>
+  );
+}
+
+/* ----------------------- web references (grouped) ------------------------- */
+
+const PLATFORMS: { host: string; name: string }[] = [
+  { host: "linkedin.com", name: "LinkedIn" },
+  { host: "facebook.com", name: "Facebook" },
+  { host: "instagram.com", name: "Instagram" },
+  { host: "x.com", name: "X" },
+  { host: "twitter.com", name: "X" },
+  { host: "reddit.com", name: "Reddit" },
+  { host: "github.com", name: "GitHub" },
+  { host: "youtube.com", name: "YouTube" },
+  { host: "tiktok.com", name: "TikTok" },
+  { host: "pinterest.com", name: "Pinterest" },
+];
+const DIRECTORY_HOSTS = ["whitepages.com.au", "yellowpages.com.au", "truelocal.com.au", "localsearch.com.au", "productreview.com.au", "hotfrog.com.au", "startlocal.com.au", "wordofmouth.com.au"];
+
+function hostOf(url?: string): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+function classifyRef(url?: string): { group: "social" | "directory" | "web"; platform?: string } {
+  const h = hostOf(url);
+  const p = PLATFORMS.find((x) => h === x.host || h.endsWith("." + x.host));
+  if (p) return { group: "social", platform: p.name };
+  if (DIRECTORY_HOSTS.some((d) => h === d || h.endsWith("." + d))) return { group: "directory" };
+  return { group: "web" };
+}
+
+/** A single web result rendered like a proper search result. */
+function RefRow({ item }: { item: ProviderResult["results"][number] }) {
+  const host = hostOf(item.sourceUrl);
+  const cl = classifyRef(item.sourceUrl);
+  return (
+    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="block rounded-xl border border-slate-100 bg-white px-3.5 py-3 transition-colors hover:border-brand-200 hover:bg-brand-50/30">
+      <div className="flex items-center gap-2">
+        {cl.platform && <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-600">{cl.platform}</span>}
+        <span className="truncate text-sm font-semibold text-brand-700">{item.title}</span>
+        <Icon name="external" size={12} className="ml-auto shrink-0 text-slate-300" />
+      </div>
+      {host && <div className="mt-0.5 truncate text-xs text-accent-600">{host}</div>}
+      {item.detail && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-muted">{item.detail}</p>}
+    </a>
+  );
+}
+
+/** Grouped, real web-search results (Social / Directories / Web references). */
+function WebReferences({ p }: { p: ProviderResult }) {
+  const groups = { social: [] as typeof p.results, directory: [] as typeof p.results, web: [] as typeof p.results };
+  for (const it of p.results) groups[classifyRef(it.sourceUrl).group].push(it);
+
+  const sections: { key: keyof typeof groups; title: string }[] = [
+    { key: "social", title: "Public profiles" },
+    { key: "directory", title: "Directories & listings" },
+    { key: "web", title: "Web references" },
+  ];
+  return (
+    <div className="space-y-4">
+      {sections
+        .filter((s) => groups[s.key].length)
+        .map((s) => (
+          <div key={s.key}>
+            <p className="eyebrow mb-2 text-ink-faint">
+              {s.title} · {groups[s.key].length}
+            </p>
+            <div className="grid gap-2">
+              {groups[s.key].map((it, i) => (
+                <RefRow key={i} item={it} />
+              ))}
+            </div>
+          </div>
+        ))}
+      <p className="text-[11px] text-ink-muted">
+        Found via {p.sourceAuthority ?? "web search"}. These are public search results — a matching name doesn&rsquo;t confirm it&rsquo;s the same person.
+      </p>
     </div>
   );
 }
@@ -175,6 +253,8 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
   const doubleChecks: string[] = [];
   if (top) for (const e of top.evidence) if (e.polarity === "conflict") doubleChecks.push(`Conflicting ${e.label.toLowerCase()} between records.`);
   for (const p of report.providers) if (p.status === "not_configured") doubleChecks.push(`${p.providerLabel} was not checked (${p.warnings[0] ?? "needs configuration"}).`);
+
+  const webProvider = report.providers.find((p) => p.category === "web" && p.status === "complete" && p.results.length > 0);
 
   return (
     <div className="space-y-5">
@@ -269,6 +349,21 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
               )}
             </Panel>
 
+            {webProvider && (
+              <Panel title="Top web references" sub="Best public matches found on the open web." pill={<StatusPill tone="good">{webProvider.results.length} found</StatusPill>}>
+                <div className="grid gap-2">
+                  {webProvider.results.slice(0, 5).map((it, i) => (
+                    <RefRow key={i} item={it} />
+                  ))}
+                </div>
+                {webProvider.results.length > 5 && (
+                  <button onClick={() => setActive("digital")} className="mt-3 text-sm font-bold text-brand-600 hover:underline">
+                    See all {webProvider.results.length} web references →
+                  </button>
+                )}
+              </Panel>
+            )}
+
             <Panel title="Key findings" sub="Signals worth seeing before opening every source." pill={<StatusPill tone="neutral">{findings.length} signals</StatusPill>}>
               {findings.length ? (
                 <div className="space-y-2.5">
@@ -308,19 +403,23 @@ export function Results({ report, candidates, subject }: { report: SearchReport;
         </div>
       )}
 
-      {/* OPTIONAL DATA TABS */}
+      {/* OPTIONAL DATA TABS — one panel per source; web search gets grouped result cards */}
       {OPTIONAL_TABS.map(
         (t) =>
           activeTab === t.id && (
             <div key={t.id} className="grid gap-5">
               {tabProviders[t.id].length ? (
-                <Panel title={t.label} sub="Public-source findings for this search.">
-                  <div className="space-y-4">
-                    {tabProviders[t.id].map((p) => (
-                      <ProviderBlock key={p.provider} p={p} />
-                    ))}
-                  </div>
-                </Panel>
+                tabProviders[t.id].map((p) =>
+                  p.category === "web" ? (
+                    <Panel key={p.provider} title="Online presence & web references" sub={`${p.results.length} public result${p.results.length === 1 ? "" : "s"}, grouped by type.`} pill={<StatusPill tone="good">Live</StatusPill>}>
+                      <WebReferences p={p} />
+                    </Panel>
+                  ) : (
+                    <Panel key={p.provider} title={p.providerLabel} sub="Public-source findings for this search." pill={<OriginBadge p={p} />}>
+                      <ProviderBlock p={p} />
+                    </Panel>
+                  ),
+                )
               ) : (
                 <EmptyState text="No findings in this section for this search." />
               )}

@@ -5,6 +5,21 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] — 2026-08-11
+
+### Changed
+- Web/online results now render as proper, grouped **search-result cards** — "Public profiles"
+  (LinkedIn/Facebook/etc., badged), "Directories & listings", and "Web references" — showing the
+  actual found pages (title, domain, snippet). The best few are surfaced on the Overview tab with a
+  "see all" jump to the full "Online presence & web references" card.
+- Social discovery is now **real found results instead of manual "go and search" link buttons**:
+  when a web-search engine is configured, the redundant `searchlinks` social/search links are
+  suppressed (the real results cover them).
+
+### Fixed
+- Stripped HTML tags and entities (`<strong>`, `&#x27;`, `&amp;`, …) from search-result snippets,
+  which were rendering as literal text.
+
 ## [0.5.2] — 2026-08-11
 
 ### Added

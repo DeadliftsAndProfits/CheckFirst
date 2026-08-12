@@ -15,12 +15,26 @@ interface Hit {
   snippet: string;
 }
 
+/** Search engines return snippets with <strong> highlights and HTML entities. */
+function clean(s: string): string {
+  return (s ?? "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function googleSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
   const url = `https://www.googleapis.com/customsearch/v1?key=${config.google.apiKey}&cx=${config.google.cx}&num=5&q=${encodeURIComponent(query)}`;
   const res = await fetchWithTimeout(url, { timeoutMs: 8000, parentSignal: signal });
   if (!res.ok) throw new Error(`Google CSE HTTP ${res.status}`);
   const data = (await res.json()) as { items?: { title: string; link: string; snippet: string }[] };
-  return (data.items ?? []).map((i) => ({ title: i.title, link: i.link, snippet: i.snippet }));
+  return (data.items ?? []).map((i) => ({ title: clean(i.title), link: i.link, snippet: clean(i.snippet) }));
 }
 
 async function bingSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
@@ -32,7 +46,7 @@ async function bingSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
   });
   if (!res.ok) throw new Error(`Bing HTTP ${res.status}`);
   const data = (await res.json()) as { webPages?: { value?: { name: string; url: string; snippet: string }[] } };
-  return (data.webPages?.value ?? []).map((i) => ({ title: i.name, link: i.url, snippet: i.snippet }));
+  return (data.webPages?.value ?? []).map((i) => ({ title: clean(i.name), link: i.url, snippet: clean(i.snippet) }));
 }
 
 async function braveSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
@@ -44,7 +58,7 @@ async function braveSearch(query: string, signal: AbortSignal): Promise<Hit[]> {
   });
   if (!res.ok) throw new Error(`Brave HTTP ${res.status}`);
   const data = (await res.json()) as { web?: { results?: { title: string; url: string; description?: string }[] } };
-  return (data.web?.results ?? []).map((i) => ({ title: i.title, link: i.url, snippet: i.description ?? "" }));
+  return (data.web?.results ?? []).map((i) => ({ title: clean(i.title), link: i.url, snippet: clean(i.description ?? "") }));
 }
 
 export const webSearchProvider: Provider = {
