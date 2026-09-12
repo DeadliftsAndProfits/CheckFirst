@@ -5,6 +5,25 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-09-12
+
+### Added
+- **Free breach-status coverage — no API key required.** Two new public breach-index providers now
+  run for every user on the free product:
+  - **XposedOrNot** (`xposedornot`) — reports the names, dates, record counts and exposed data
+    *types* of breaches an email appears in.
+  - **LeakCheck public API** (`leakcheck`) — reports how many known breaches an email appears in,
+    the source names/dates, and the exposed data *types*.
+  - Both surface only breach *metadata* — never passwords, credentials, or leaked values — matching
+    the existing HIBP provider's discipline, and carry the "reflects third-party incidents, not this
+    person's conduct" warning.
+- Breach providers are ordered free-first in the registry; the paid **Have I Been Pwned** provider
+  stays available but dormant (`not_configured`) unless an `HIBP_API_KEY` is ever supplied.
+
+### Notes
+- Have I Been Pwned has no free tier for account lookups, so it now reports "not checked" by design;
+  live breach results come from the two free indexes above.
+
 ## [0.6.0] — 2026-08-11
 
 ### Added

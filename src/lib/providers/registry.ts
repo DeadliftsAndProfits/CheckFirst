@@ -10,6 +10,8 @@ import { webContentProvider } from "./webcontent";
 import { abnProvider } from "./abn";
 import { webSearchProvider } from "./websearch";
 import { hibpProvider } from "./hibp";
+import { xposedOrNotProvider } from "./xposedornot";
+import { leakCheckProvider } from "./leakcheck";
 import { gravatarProvider } from "./gravatar";
 import { searchLinksProvider, courtsProvider, licencesProvider, professionalProvider } from "./discovery";
 
@@ -25,7 +27,10 @@ export const providers: Provider[] = [
   tlsProvider,
   ctProvider,
   webContentProvider,
-  // Contact / breach.
+  // Contact / breach. Free, no-key breach indexes run first (they work for
+  // every user); HIBP stays available if an API key is ever configured.
+  xposedOrNotProvider,
+  leakCheckProvider,
   hibpProvider,
   gravatarProvider,
   // Web & social discovery (links, not searches).
