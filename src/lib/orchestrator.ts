@@ -115,8 +115,27 @@ export async function* runSearch(input: SearchInput, opts: OrchestratorOptions =
   if (identity) candidates = [identity.candidate, ...candidates];
   yield { kind: "candidates", candidates };
 
-  const report = buildReport(input, normalised, queries, collected, candidates, startedAt, identity?.summary);
+  const diagnostics = buildDiagnostics(queries, collected, startedAt);
+  const report = buildReport(input, normalised, queries, collected, candidates, startedAt, identity?.summary, diagnostics);
   yield { kind: "report", report };
+}
+
+/** Per-investigation developer diagnostics (§40, §48). Logged + attached to the report. */
+function buildDiagnostics(queries: string[], providers: ProviderResult[], startedAt: string): Record<string, unknown> {
+  const web = providers.find((p) => p.provider === "websearch");
+  const webMetrics = (web?.diagnostics?.web ?? null) as Record<string, unknown> | null;
+  const structuredProviderCalls = providers.filter(
+    (p) => p.category !== "web" && (p.dataOrigin === "live" || p.dataOrigin === "cached" || p.dataOrigin === "local_dataset"),
+  ).length;
+  const diagnostics: Record<string, unknown> = {
+    candidateWebQueriesGenerated: queries.length,
+    selectedWebProvider: (webMetrics?.selectedWebProvider as string | null) ?? null,
+    structuredProviderCalls,
+    investigationDurationMs: Date.now() - new Date(startedAt).getTime(),
+    web: webMetrics,
+  };
+  console.info("[investigation] diagnostics", JSON.stringify(diagnostics));
+  return diagnostics;
 }
 
 function buildReport(
@@ -127,6 +146,7 @@ function buildReport(
   candidates: Candidate[],
   startedAt: string,
   identity?: SearchReport["identity"],
+  diagnostics?: Record<string, unknown>,
 ): SearchReport {
   const summary = computeSummary(providers);
   const notices: string[] = [];
@@ -145,6 +165,7 @@ function buildReport(
     identity,
     summary,
     notices,
+    diagnostics,
     startedAt,
     finishedAt: new Date().toISOString(),
   };

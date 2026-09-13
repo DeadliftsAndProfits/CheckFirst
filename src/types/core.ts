@@ -145,6 +145,8 @@ export interface ProviderResult {
   cacheExpiry?: string;
   /** True when any result item is demo data. */
   demo?: boolean;
+  /** Developer diagnostics (e.g. web-router metrics). Not for end-user display. */
+  diagnostics?: Record<string, unknown>;
 }
 
 /** Evidence line shown under a candidate's confidence score. */
@@ -216,6 +218,8 @@ export interface SearchReport {
   };
   /** Non-fatal notes for the user (e.g. providers not configured). */
   notices: string[];
+  /** Per-investigation developer diagnostics (query/cache/API metrics). */
+  diagnostics?: Record<string, unknown>;
   startedAt: string;
   finishedAt: string;
 }

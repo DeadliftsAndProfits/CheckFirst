@@ -5,6 +5,37 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-09-13
+
+### Added
+- **Multi-provider web-search router** (`src/lib/websearch/`) over three RAW web-search engines —
+  **Brave → You.com → Tavily** (order via `SEARCH_PROVIDER_ORDER`):
+  - **Sticky provider per investigation** — one engine serves all of a search's queries.
+  - **Operational fallback only** — falls back to the next engine on rate-limit / quota / timeout /
+    outage / config failure, **never** because results are weak or empty (a zero-result search is a
+    success). **Mid-investigation fallback** retries only the failed queries on the next engine;
+    successful queries are never re-run.
+  - **Cache-before-API** (in-memory, per-kind TTL) so re-running or editing a search reuses results
+    and spends no credits; **URL canonicalisation + de-duplication**; full **provenance** (engine,
+    query, retrieved-at, cache status) on every result.
+  - **Raw search only** — Tavily `search_depth:"basic", include_answer:false`; You.com Web Search
+    endpoint only (never Answer/Research). No LLM in the loop.
+  - **Per-engine usage tracking + cooldown** and **per-investigation diagnostics** (selected
+    provider, queries generated/executed, cache hits, API calls consumed, fallbacks) — logged and
+    attached to `report.diagnostics`.
+  - New env: `YOU_SEARCH_API_KEY`, `TAVILY_API_KEY`, `SEARCH_PROVIDER_ORDER`,
+    `SEARCH_QUERY_SAFETY_MAX`, per-engine `*_SEARCH_ENABLED`, `SEARCH_CACHE_TTL_SECONDS`.
+- **`WEB_QUERY_AUDIT.md`** — a full audit of the existing sub-query generator (per search type,
+  templates, counts, examples) to inform a later query-strategy milestone.
+
+### Changed
+- Removed the arbitrary **4-query execution cap** in the web-search provider. Web query count is now
+  driven by the user's distinct signals and bounded only by the configurable circuit-breaker
+  `SEARCH_QUERY_SAFETY_MAX` (default 12), which **logs** any truncation. The sub-query generator
+  itself was **audited but deliberately not redesigned** this milestone.
+- Google CSE / Bing are no longer part of the web-search path (Google CSE is being retired
+  Jan 2027); they remain as dormant legacy config only.
+
 ## [0.7.0] — 2026-09-12
 
 ### Added

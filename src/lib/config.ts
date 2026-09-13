@@ -40,6 +40,18 @@ export const config = {
       return Boolean(this.apiKey);
     },
   },
+  you: {
+    apiKey: process.env.YOU_SEARCH_API_KEY ?? "",
+    get configured() {
+      return Boolean(this.apiKey);
+    },
+  },
+  tavily: {
+    apiKey: process.env.TAVILY_API_KEY ?? "",
+    get configured() {
+      return Boolean(this.apiKey);
+    },
+  },
   abr: {
     guid: process.env.ABR_GUID ?? "",
     get configured() {
@@ -59,9 +71,47 @@ export const config = {
       windowSeconds: num("CHECKFIRST_RATE_LIMIT_WINDOW_SECONDS", 60),
     };
   },
+
+  /** Web-search router configuration (multi-provider: Brave → You.com → Tavily). */
+  search: {
+    /**
+     * Preferred web-search engine order (SEARCH_PROVIDER_ORDER, comma-separated).
+     * The first configured + enabled engine is chosen "sticky" for an
+     * investigation; the rest are operational fallbacks only.
+     */
+    order(): string[] {
+      return (process.env.SEARCH_PROVIDER_ORDER ?? "brave,you,tavily")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+    },
+    /** Per-engine on/off switch, e.g. YOU_SEARCH_ENABLED=false. Defaults to on. */
+    enabled(id: string): boolean {
+      return (process.env[`${id.toUpperCase()}_SEARCH_ENABLED`] ?? "true").toLowerCase() !== "false";
+    },
+    /**
+     * Circuit-breaker ceiling on web queries per investigation
+     * (SEARCH_QUERY_SAFETY_MAX). NOT a target — the generator produces however
+     * many legitimate queries the user's input justifies, up to this cap. If the
+     * cap truncates, it is logged.
+     */
+    querySafetyMax: num("SEARCH_QUERY_SAFETY_MAX", 12),
+    /** Cache TTL (seconds) by search kind (§23). */
+    cacheTtlSeconds(kind: "phone" | "email" | "person" | "business" | "website" | "news"): number {
+      const map: Record<string, number> = {
+        phone: 24 * 3600,
+        email: 24 * 3600,
+        person: 18 * 3600,
+        business: 24 * 3600,
+        website: 24 * 3600,
+        news: 2 * 3600,
+      };
+      return num("SEARCH_CACHE_TTL_SECONDS", map[kind] ?? 12 * 3600);
+    },
+  },
 };
 
-/** Whether any web-search provider is configured (Brave, Google or Bing). */
+/** Whether any web-search engine is configured (Brave, You.com or Tavily). */
 export function webSearchConfigured(): boolean {
-  return config.brave.configured || config.google.configured || config.bing.configured;
+  return config.brave.configured || config.you.configured || config.tavily.configured;
 }

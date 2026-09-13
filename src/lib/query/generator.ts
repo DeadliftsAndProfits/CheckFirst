@@ -8,6 +8,7 @@
  */
 import type { SearchInput } from "@/types/core";
 import { phoneVariants } from "@/lib/validation/phone";
+import { config } from "@/lib/config";
 
 export interface DiscoveryLink {
   label: string;
@@ -108,7 +109,19 @@ export function generateQueries(input: SearchInput, n: Record<string, string>): 
     }
   }
 
-  return [...q].slice(0, 12);
+  // The query count is driven by the user's distinct signals — NOT a target.
+  // SEARCH_QUERY_SAFETY_MAX is only a circuit breaker against runaway/malformed
+  // input; if it ever truncates, we log exactly what was dropped (§3, §42).
+  const list = [...q];
+  const max = config.search.querySafetyMax;
+  if (list.length > max) {
+    console.warn(`[websearch] query ceiling reached: generated ${list.length}, capping to SEARCH_QUERY_SAFETY_MAX=${max}`, {
+      type: input.type,
+      dropped: list.slice(max),
+    });
+    return list.slice(0, max);
+  }
+  return list;
 }
 
 /** Build public discovery links the consumer can open in one click. */

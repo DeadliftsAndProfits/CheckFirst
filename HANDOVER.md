@@ -1,6 +1,6 @@
 # Check First — HANDOVER
 
-_Last updated: 2026-08-10._ Status reflects the actual repository state, verified by running it.
+_Last updated: 2026-09-13._ Status reflects the actual repository state, verified by running it.
 
 ## Overall status
 
@@ -158,6 +158,30 @@ screenshots of loading + person/website/mobile results ✔.
   commands, the identical PLAN→IMPLEMENT→RUN→TEST→VERIFY loop was run using a file-based project
   system in `/docs`. See `docs/ASSUMPTIONS.md` A1 and `docs/BLOCKERS.md` B1.
 
+## Multi-provider web-search router (2026-09-13)
+
+Replaced the single-engine web search with a router over three RAW web-search engines. Code lives
+in `src/lib/websearch/` (`types`, `clean`, `engineUtil`, `engines/{brave,you,tavily}`, `cache`,
+`usage`, `registry`, `router`); the orchestrator-level `websearch` provider now delegates to it.
+
+- **Order:** Brave → You.com → Tavily (`SEARCH_PROVIDER_ORDER`). **Sticky** per investigation.
+- **Fallback only on operational failure** (rate/quota/timeout/outage/config) — never on weak/zero
+  results. **Mid-investigation fallback** retries only the failed queries on the next engine.
+- **Cache before API** (in-memory, per-kind TTL; persistence deferred by product decision — resets
+  on restart). Re-running / editing a search reuses cache and spends no credits.
+- **Raw only:** Tavily `search_depth:"basic", include_answer:false`; You.com Web Search endpoint
+  only (no Answer/Research). No LLM in the loop; Check First stays the intelligence layer.
+- **Removed the arbitrary 4-query execution cap** (`websearch.ts`); execution is now bounded by the
+  configurable circuit-breaker `SEARCH_QUERY_SAFETY_MAX` (default 12), which **logs** any truncation.
+- **Diagnostics** per investigation (selected provider, queries generated/executed, cache hits, API
+  calls, fallbacks) are logged and attached to `report.diagnostics` (§40/§48).
+- **Audited but NOT redesigned:** the existing sub-query generator (see `WEB_QUERY_AUDIT.md`). The
+  query strategy will be revised in a separate milestone.
+- **Verified:** tsc ✔ · lint ✔ · **71 unit+integration ✔** (13 new router tests) · prod build ✔ ·
+  live Brave (5 queries, 18 results; re-run 0 API calls / cached) ✔ · browser search→results ✔.
+- **Action required:** add `YOU_SEARCH_API_KEY` and `TAVILY_API_KEY` to live-test those two engines
+  (built and ready; report `not_configured` until keyed).
+
 ## What genuinely works (verified)
 
 - Landing page: hero (left marketing / right interactive search card), How-it-works, What-we-check,
@@ -190,6 +214,8 @@ screenshots of loading + person/website/mobile results ✔.
 | SSL/TLS certificate (`tls`) | Live cert for `example.com` — subject/issuer/validity returned. SSRF-guarded. |
 | Certificate Transparency (`ct`) | Live query to crt.sh; observed graceful `unavailable` on a crt.sh 502. |
 | Domain registration RDAP (`rdap`) | Live query to rdap.org; observed graceful `unavailable` on timeout. |
+| Web search (`websearch` → Brave) | Live person search: 5 queries executed, 18 results; re-run served 0 API calls from cache (`dataOrigin: cached`). Router sticky-selects Brave. |
+| Email breach status (`xposedornot`, `leakcheck`) | Live, key-free breach metadata (names/dates/data-types only, never credentials). |
 | Discovery links (`searchlinks`, `courts`, `licences`, `professional`) | Generate valid one-click links to Google/AustLII/QBCC/NSW Fair Trading/Ahpra/ASIC. No scraping. |
 
 ## Providers requiring credentials (return `not_configured`, honestly)
@@ -197,8 +223,8 @@ screenshots of loading + person/website/mobile results ✔.
 | Provider | Env needed | Notes |
 |----------|-----------|-------|
 | ABN Lookup (`abn`) | `ABR_GUID` (free) | Real ABR web-services calls implemented; register at abr.business.gov.au/Tools/WebServices. |
-| Web search (`websearch`) | `GOOGLE_CSE_API_KEY`+`GOOGLE_CSE_CX` or `BING_SEARCH_API_KEY` | Google CSE and Bing both implemented. |
-| Email breach status (`hibp`) | `HIBP_API_KEY` | Status/date only; never passwords or dumps. |
+| Web search fallbacks (`websearch`) | `YOU_SEARCH_API_KEY`, `TAVILY_API_KEY` | Brave is LIVE; You.com + Tavily engines built, `not_configured` until keyed. Raw search only. |
+| Email breach status (`hibp`) | `HIBP_API_KEY` (paid, optional) | Free live breach status already provided by `xposedornot` + `leakcheck` (no key). |
 
 ## Not implemented (documented extension points)
 - Live licence-register **APIs** (QBCC/NSW/VBA) — MVP provides official-portal discovery links, not

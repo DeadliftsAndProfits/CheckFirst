@@ -56,8 +56,10 @@ attempt, third-party failed · **DEMO** = fixture (explicit demo mode only).
 | `gravatar` (R3) | email | md5 → avatar + profile.json | **LIVE** | none | gravatar.com | ✅ 200 | profile/none | — |
 | `webcontent` (R3) | website/business | SSRF-guarded homepage fetch, title/meta + ABN/ACN scan | **LIVE** | none | target site | ✅ telstra | title parsed | render-heavy sites won't expose SPA content |
 | `abn` | business | ABR web services JSON | **REQUIRES CONFIG** | ABR GUID (free) | abr.business.gov.au | ✅ (empty GUID rejected) | needs GUID | obtain free GUID |
-| `websearch` | web | Google CSE / Bing | **REQUIRES CONFIG** | API key | googleapis / bing | ✅ (no key → not_configured) | needs key | add GOOGLE_CSE_* or BING key |
-| `hibp` | email | HIBP v3 | **REQUIRES CONFIG** | API key | haveibeenpwned.com | n/a | needs key | add HIBP_API_KEY |
+| `websearch` | web | **Router: Brave → You.com → Tavily** (raw search, sticky provider, operational fallback, in-memory cache) | **LIVE** (Brave keyed) | API key per engine | api.search.brave.com · ydc-index.io · api.tavily.com | ✅ live (Brave: 5 queries, 18 results; re-run 0 API calls / cached) | LIVE via Brave | add `YOU_SEARCH_API_KEY` / `TAVILY_API_KEY` to enable fallbacks |
+| `xposedornot` | email | XposedOrNot breach index | **LIVE** | none | api.xposedornot.com | ✅ live | breach metadata | — |
+| `leakcheck` | email | LeakCheck public API | **LIVE** | none | leakcheck.io/api/public | ✅ live | breach metadata | — |
+| `hibp` | email | HIBP v3 | **REQUIRES CONFIG** | API key (paid) | haveibeenpwned.com | n/a | dormant (no free tier) | optional `HIBP_API_KEY` |
 | `searchlinks` | online | builds Google `site:` search URLs | **LINK** | none | — | ✅ | links only | not a search; official discovery links |
 | `courts` | public_records | AustLII/court search URLs | **LINK** | none | — | ✅ | links only | live AustLII API is a future connector |
 | `licences` | licences | QBCC/NSW portal URLs | **LINK** | none | — | ✅ | links only | live per-register connectors (future) |
@@ -74,10 +76,27 @@ attempt, third-party failed · **DEMO** = fixture (explicit demo mode only).
 - Honest final summary: sources searched / returned results / no results / unavailable / needs
   configuration / official links.
 
+## Web-search router (added in the multi-provider milestone)
+- `websearch` is now a **router** over three RAW web-search engines: **Brave → You.com → Tavily**
+  (order via `SEARCH_PROVIDER_ORDER`). Code in `src/lib/websearch/`.
+- **Sticky per investigation:** one engine is chosen at the start; all queries use it. Fallback to
+  the next engine happens **only on operational failure** (rate limit, quota, timeout, outage,
+  config/auth) — never because results are weak or empty (a zero-result search is a success).
+- **Mid-investigation fallback:** only queries that failed operationally are retried on the next
+  engine; already-successful queries are never re-run.
+- **Cache before API:** in-memory cache (per-kind TTL) is checked before every call, so re-running
+  or editing a search reuses results and spends no credits. (Persistence deferred by product
+  decision — cache resets on restart.)
+- **No LLM:** Tavily runs `search_depth:"basic", include_answer:false`; You.com uses the Web Search
+  endpoint only (never Answer/Research). Check First remains the intelligence layer.
+- **Diagnostics:** per investigation we record selected provider, queries generated/executed,
+  cache hits, API calls consumed, and fallbacks (logged + on `report.diagnostics`).
+- **Google CSE / Bing:** legacy, NOT used by the router (Google CSE retires Jan 2027).
+
 ## Still not real without configuration or further engineering
 - **Business identity (ABN/ACN, GST, entity):** needs a free `ABR_GUID`. One env var away from LIVE.
-- **Public web / phone / social discovery:** needs a web-search API key (`GOOGLE_CSE_*` or `BING`).
-  Until then, only official discovery **links** are provided (honestly labelled).
-- **Email breach status:** needs `HIBP_API_KEY`.
+- **Web search fallbacks:** Brave is LIVE; You.com and Tavily are built and report `not_configured`
+  until `YOU_SEARCH_API_KEY` / `TAVILY_API_KEY` are added.
+- **Email breach status:** LIVE and free via XposedOrNot + LeakCheck (no key). HIBP is optional/paid.
 - **Live licence / court / professional register lookups:** no free automatable API; discovery
   links only. Future per-register connectors or licensed data feeds required.
