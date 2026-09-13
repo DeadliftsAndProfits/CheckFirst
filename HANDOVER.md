@@ -1,6 +1,6 @@
 # Check First — HANDOVER
 
-_Last updated: 2026-09-13._ Status reflects the actual repository state, verified by running it.
+_Last updated: 2026-09-14._ Status reflects the actual repository state, verified by running it.
 
 ## Overall status
 
@@ -157,6 +157,46 @@ screenshots of loading + person/website/mobile results ✔.
   this machine** (no skill/plugin/command; absent from the tool list). Rather than fabricate GSD
   commands, the identical PLAN→IMPLEMENT→RUN→TEST→VERIFY loop was run using a file-based project
   system in `/docs`. See `docs/ASSUMPTIONS.md` A1 and `docs/BLOCKERS.md` B1.
+
+## Person web sub-query strategy V2 (2026-09-14)
+
+Redesigned `generateQueries()` for **Person** searches only (`src/lib/query/generator.ts` →
+`personSignals()`). Principle: distinct claims → distinct queries; remove semantic duplicates;
+preserve legitimately different exact representations. Router, cache, fallback, structured providers,
+loading/results and confidence were **not** touched.
+
+- Name+employer → one `"Name" "Employer" State`; location → separate `"Name" Suburb State`; LinkedIn
+  → one query on strongest context; bare name → fallback only; email → exact only (no handle);
+  username → new exact query; phone → three exact representations as **separate** queries.
+- **Phone Boolean-OR rejected on evidence (§9):** live Brave test showed bare digits = 10 results,
+  OR-combined = 0. So no OR, and therefore **no per-engine divergence and no router change**.
+- Diagnostics expose the Person plan (logical signals vs physical queries) on
+  `report.diagnostics.plan`.
+- Verified: tsc ✔ · lint ✔ · **81 unit+integration** ✔ (10 new person-query tests) · prod build ✔ ·
+  live rich person search produced exactly the intended 6-signal / 8-physical-query plan.
+- Rich person example now: `"Alex Taylor" "Acme Finance" QLD` · `"Alex Taylor" Brisbane QLD` ·
+  `"Alex Taylor" "Acme Finance" site:linkedin.com` · `"alex@example.com"` · `"alextaylor77"` ·
+  three phone variants = 8 physical queries (was capped at 4 and full of duplicates before).
+
+### Identity matcher V2 (2026-09-14)
+
+The V2 query redesign initially regressed the flagship Sam Magee search (88%→22%) because the matcher
+required all evidence on the one result that supplied the LinkedIn profile. `src/lib/identity.ts` was
+rewritten to correlate evidence at the **candidate/investigation** level:
+
+- A profile establishes a candidate by **name**; the finding query need not contain the employer.
+- Employer/location/contact corroboration may come from **any** result or query and raises confidence
+  ("corroborated" for text, "corroborated · via search" for query-only).
+- Regional LinkedIn hosts (`www.`/`au.`/`uk.` `/in/<slug>`) canonicalise to **one** candidate.
+- Conservative: name alone is never strong; name/AU-only is capped as a *possible* match; an employer
+  that disagrees with the profile lowers confidence.
+- **Flagship result:** Sam Magee / Panthera Finance / QLD → **top candidate, his real
+  `au.linkedin.com/in/sam-magee-6656942b` found, location corroborated**, employer honestly "as
+  provided" (V2's quoted-employer query returns 0 on Brave, so it can't be corroborated for him).
+- Verified: tsc ✔ · lint ✔ · **86 unit+integration** ✔ (5 new identity regression tests: cross-result
+  correlation, URL canonicalisation, same-name stranger stays weak, employer-disagreement penalty,
+  name/AU-only cap) · prod build ✔ · live flagship search ✔.
+- Business identity matching was left unchanged (V2 scope is Person only).
 
 ## Multi-provider web-search router (2026-09-13)
 

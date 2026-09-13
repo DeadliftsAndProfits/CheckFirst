@@ -1,8 +1,17 @@
 # WEB_QUERY_AUDIT.md
 
-Audit of Check First's **existing** web sub-query generation, as it stands before
-the multi-provider router milestone. This documents current behaviour only — it
-does **not** propose a redesign (per milestone §1–§2). All examples use safe,
+> **UPDATE (2026-09-14):** The **Person** strategy documented below has since been
+> redesigned — see "Person web sub-query strategy V2" in `CHANGELOG.md` (v0.9.0)
+> and `src/lib/query/generator.ts` → `personSignals()`. Notably the `websearch.ts`
+> 4-query cap was removed, the weaker duplicate employer forms were dropped, the
+> bare-name query is now a fallback, email no longer spawns a handle search,
+> usernames now generate a web query, and phone uses three separate exact queries
+> (Brave Boolean-OR was empirically shown to lose results). Business, Website,
+> Phone-type and Email-type grammars below are still current.
+
+Audit of Check First's **existing** web sub-query generation, as it stood before
+the multi-provider router milestone. This documents that behaviour — it does
+**not** propose a redesign (per that milestone's §1–§2). All examples use safe,
 synthetic inputs.
 
 Source of truth:

@@ -124,6 +124,7 @@ export async function* runSearch(input: SearchInput, opts: OrchestratorOptions =
 function buildDiagnostics(queries: string[], providers: ProviderResult[], startedAt: string): Record<string, unknown> {
   const web = providers.find((p) => p.provider === "websearch");
   const webMetrics = (web?.diagnostics?.web ?? null) as Record<string, unknown> | null;
+  const plan = (web?.diagnostics?.plan ?? null) as Record<string, unknown> | null;
   const structuredProviderCalls = providers.filter(
     (p) => p.category !== "web" && (p.dataOrigin === "live" || p.dataOrigin === "cached" || p.dataOrigin === "local_dataset"),
   ).length;
@@ -132,6 +133,7 @@ function buildDiagnostics(queries: string[], providers: ProviderResult[], starte
     selectedWebProvider: (webMetrics?.selectedWebProvider as string | null) ?? null,
     structuredProviderCalls,
     investigationDurationMs: Date.now() - new Date(startedAt).getTime(),
+    plan,
     web: webMetrics,
   };
   console.info("[investigation] diagnostics", JSON.stringify(diagnostics));

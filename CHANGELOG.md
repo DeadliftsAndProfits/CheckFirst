@@ -5,6 +5,54 @@ All notable changes to Check First are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-09-14
+
+### Changed
+- **Person web sub-query strategy V2** — redesigned `generateQueries()` for Person searches so each
+  query tests a **materially distinct claim** and semantic duplicates are removed (router, cache,
+  fallback, structured providers and confidence are untouched):
+  - **Name + employer/context:** one strong quoted query `"Name" "Employer" State` (removed the old
+    weaker duplicates `Name Employer`, `"Name" Employer`, `Name Employer linkedin`).
+  - **Location:** a separate `"Name" Suburb State` query (independent claim).
+  - **LinkedIn:** one query using the strongest available context (employer → location → name).
+  - **Bare name:** now a **fallback only** — omitted when stronger context (employer/location) exists.
+  - **Email:** exact address only — removed the automatic local-part/handle search.
+  - **Username:** now generates an exact `"username"` web query (previously discovery-links only).
+  - **Australian phone:** the three canonical representations (`0412345678`, `0412 345 678`,
+    `+61412345678`) are preserved as **separate exact queries**.
+- **Phone Boolean-OR rejected on evidence (§9).** Empirically tested Brave: a bare-digit query
+  returned 10 results while the `"…" OR "…" OR "…"` form returned **0** — Boolean OR destroys results
+  for quoted numeric phrases. Per the milestone's validation gate, phone uses separate queries on
+  every engine (no per-engine divergence; no router change needed).
+- **Per-investigation diagnostics** now expose the Person query **plan** (logical signals vs physical
+  provider queries, with a per-signal breakdown) on `report.diagnostics.plan`.
+
+- **Identity matcher V2 — candidate/investigation-level correlation** (`src/lib/identity.ts`). The
+  V2 query redesign exposed that the matcher required all evidence on the single result that
+  supplied the profile. Now:
+  - A public profile (e.g. LinkedIn) establishes a candidate from **name/profile** evidence without
+    the finding query needing to contain the employer.
+  - **Employer / location / contact** signals may come from a **separate** result for the same
+    candidate and raise confidence. A supplied value is corroborated **only when it actually appears
+    in a result/snippet** — never merely because it was in the search query that returned the result
+    (so `"Sam Magee" QLD` returning a profile does not, by itself, corroborate QLD; it stays
+    "as provided").
+  - Equivalent profile URLs across **regional hosts** (`www.`/`au.`/`uk.` `linkedin.com/in/<slug>`)
+    canonicalise to **one** candidate, not several.
+  - Matching stays **conservative**: name alone is never a strong match; a name-only/AU-only profile
+    is capped as a *possible* match; an employer that **disagrees** with the profile lowers confidence.
+  - Restores the flagship Sam Magee / Panthera Finance / QLD search to the top candidate with his
+    real AU LinkedIn profile found. Confidence is an honest **55%** ("possible match"): the profile
+    matches by name on an AU host, but nothing in the results independently corroborates QLD or the
+    employer, so both remain "as provided".
+
+### Notes
+- Business, Website, Phone-type and Email-type search grammars were **not** changed (out of scope).
+  The historical generator behaviour is recorded in `WEB_QUERY_AUDIT.md`.
+- Observation for a future query tweak: like the phone Boolean-OR, the **double-quoted employer**
+  query (`"Name" "Employer" State`) is empirically strict on Brave (returned 0 for the Sam Magee
+  case). Unquoting the employer may improve employer corroboration; deferred (not in this scope).
+
 ## [0.8.0] — 2026-09-13
 
 ### Added

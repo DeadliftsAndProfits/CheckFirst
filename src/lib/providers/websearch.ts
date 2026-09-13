@@ -12,6 +12,7 @@
 import type { ResultItem, SearchType } from "@/types/core";
 import { type Provider, type ProviderContext, buildResult, ok, notConfigured } from "./base";
 import { config, webSearchConfigured } from "@/lib/config";
+import { personSignals } from "@/lib/query/generator";
 import { runWebSearch } from "@/lib/websearch/router";
 import { engines } from "@/lib/websearch/registry";
 import type { WebEngineId } from "@/lib/websearch/types";
@@ -81,7 +82,16 @@ export const webSearchProvider: Provider = {
     }
     const trimmed = items.slice(0, 18);
 
-    const diagnostics = { web: outcome.metrics };
+    // §12 diagnostics: logical signals vs physical provider queries (Person).
+    const diagnostics: Record<string, unknown> = { web: outcome.metrics };
+    if (ctx.input.type === "person") {
+      const plan = personSignals(ctx.normalised);
+      diagnostics.plan = {
+        logicalSignals: plan.length,
+        physicalQueries: plan.reduce((a, s) => a + s.queries.length, 0),
+        signals: plan.map((s) => ({ kind: s.kind, label: s.label, queries: s.queries.length })),
+      };
+    }
     const authority = outcome.metrics.enginesUsed.map((id: WebEngineId) => engines[id]?.name ?? id).join(" → ") || (outcome.metrics.selectedWebProvider ?? "Web search");
 
     if (!trimmed.length) {
